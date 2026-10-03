@@ -4,7 +4,7 @@ Status legend: CONFIRMED (from repository) · OWNER-CONFIRM · OWNER-ACTION. Las
 | Item | Value | Status |
 |---|---|---|
 | App name | Manual J Survey | CONFIRMED |
-| Package ID | com.verbal76.manualj (never published; recommended Hot Attic Games ID `com.hotatticgames.manualj` — changing it makes the installed test APK a separate app with separate data) | OWNER-ACTION: approve before first Play upload |
+| Package ID | **com.hotatticgames.manualj** (canonical; owner-approved 2026-10-03, before any Play upload). History: the first test APKs (CI runs #3–#6) used com.verbal76.manualj; Android treats the new ID as a different app and old local data does not transfer — accepted | CONFIRMED |
 | versionName | 0.1.0 (package.json + android/app/build.gradle; keep in sync) | CONFIRMED |
 | versionCode | env `VERSION_CODE` = GitHub Actions run number (debug workflow) / release workflow run number | CONFIRMED |
 | min / target / compile SDK | see `android/variables.gradle` (single source; About reads it at build time) | CONFIRMED |
@@ -30,4 +30,4 @@ Status legend: CONFIRMED (from repository) · OWNER-CONFIRM · OWNER-ACTION. Las
 | Internal-testing readiness | NOT READY: needs package-ID decision, upload key + secrets, Play Console app, privacy URL, assets, and a Play-API-compliant build | |
 
 ## Owner actions remaining
-1. Approve final package ID. 2. Create upload key; add four GitHub secrets (`UPLOAD_KEYSTORE_BASE64`, `UPLOAD_KEYSTORE_PASSWORD`, `UPLOAD_KEY_ALIAS`, `UPLOAD_KEY_PASSWORD`). 3. Play Developer account + create app + enable Play App Signing. 4. Host privacy policy. 5. Data safety + content rating forms. 6. Store listing assets. 7. Run `android-release.yml`, upload the AAB to Internal testing.
+1. (done: package ID approved) 2. Create upload key; add four GitHub secrets (`UPLOAD_KEYSTORE_BASE64`, `UPLOAD_KEYSTORE_PASSWORD`, `UPLOAD_KEY_ALIAS`, `UPLOAD_KEY_PASSWORD`). 3. Play Developer account + create app + enable Play App Signing. 4. Host privacy policy. 5. Data safety + content rating forms. 6. Store listing assets. 7. Run `android-release.yml`, upload the AAB to Internal testing.

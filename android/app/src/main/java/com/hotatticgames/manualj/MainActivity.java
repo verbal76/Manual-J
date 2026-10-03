@@ -1,4 +1,4 @@
-package com.verbal76.manualj;
+package com.hotatticgames.manualj;
 
 import com.getcapacitor.BridgeActivity;
 

@@ -1,10 +1,10 @@
 apply plugin: 'com.android.application'
 
 android {
-    namespace "com.verbal76.manualj"
+    namespace "com.hotatticgames.manualj"
     compileSdk rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.verbal76.manualj"
+        applicationId "com.hotatticgames.manualj"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode Integer.parseInt(System.getenv("VERSION_CODE") ?: "1")
