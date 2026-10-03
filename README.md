@@ -9,3 +9,5 @@ Field-first residential heating/cooling load **survey and calculation** tool (ph
 Commands: `npm ci`, `npm test`, `npm run build`, `npm run dev`.
 Docs: `docs/ENGINEERING_SOURCES.md`, `docs/IMPLEMENTATION_BRIEF.md`, `docs/VALIDATION_PLAN.md`, `docs/OWNER_QUESTIONS.md`.
 Engineering rule: no unsourced constants. Unknown values stay UNKNOWN and block the affected load.
+
+Release/OTA/Play: `docs/PLAY_READINESS.md`, `docs/OTA_ARCHITECTURE.md`, `docs/RELEASE_IDENTITY_UI.md`, `docs/PRIVACY_DRAFT.md`. Workflows: `android.yml` (debug APK), `android-release.yml` (signed AAB, manual), `ota-publish.yml` (OTA, manual, dry-run default).

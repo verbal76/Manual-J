@@ -16,7 +16,10 @@
     </style>
 
 
+    <!-- Native launch frame: solid black with no icon, so the Hot Attic Games card (web layer) follows without a white flash. -->
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
-        <item name="android:background">@drawable/splash</item>
+        <item name="windowSplashScreenBackground">@android:color/black</item>
+        <item name="windowSplashScreenAnimatedIcon">@android:color/transparent</item>
+        <item name="android:windowBackground">@android:color/black</item>
     </style>
 </resources>

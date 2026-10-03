@@ -1,3 +1,4 @@
+// (run with Playwright from /opt/node-tools)
 // Manual UI flow check: npm run build && npx vite preview --port 4173, then run with a Playwright install. Reproduces ANALYTIC-001 through the UI (expects 3,795 / 1,347 / 415).
 import { createRequire } from 'module';
 const require = createRequire('/opt/node-tools/');

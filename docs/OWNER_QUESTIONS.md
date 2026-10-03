@@ -3,3 +3,8 @@
 2. **ACCA example access** — Download Illustrated Example #1/#2 and Long House under ACCA's terms and give us the inputs/expected totals (or legal go-ahead to cite them). Default: validation stays analytic-only.
 3. **Cooling method** — Cooling needs sourced solar/CLTD-type data. Choices: (a) you supply a licensed table to key in privately, (b) adopt a public method (e.g. ASHRAE RTS/CLTD data you hold), (c) ship heating-only plus plain-ΔT cooling flagged INCOMPLETE (current). Default: (c).
 4. **Slab/below-grade, ducts, mechanical ventilation** — Same sourcing gap; currently excluded and flagged.
+
+## Infrastructure phase (OTA / Play)
+5. **Package ID** — keep com.verbal76.manualj or move to com.hotatticgames.manualj before first Play upload (moving resets the installed test app's data). Default: decide before Play; no change now.
+6. **OTA hosting** — public repo/`ota` branch, or another static host? Needs a public URL (set repo variables OTA_MANIFEST_URL / OTA_URL_BASE, rebuild native with OTA_MANIFEST_URL). Default: keep updates disabled until chosen.
+7. **Canonical Hot Attic Games logo** — add branding/Hot_Attic_Games_Master_Logo.png. Default: no studio card until supplied.

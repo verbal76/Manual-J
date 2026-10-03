@@ -16,11 +16,31 @@ android {
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    def uploadKeystore = System.getenv("UPLOAD_KEYSTORE_FILE")
+    signingConfigs {
+        release {
+            if (uploadKeystore) {
+                storeFile file(uploadKeystore)
+                storePassword System.getenv("UPLOAD_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("UPLOAD_KEY_ALIAS")
+                keyPassword System.getenv("UPLOAD_KEY_PASSWORD")
+            }
+        }
+    }
     buildTypes {
         release {
+            signingConfig signingConfigs.release
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
+    }
+}
+
+// Production signing must never silently fall back to debug signing: any release task without the upload key fails.
+gradle.taskGraph.whenReady { graph ->
+    def wantsRelease = graph.allTasks.any { it.project == project && it.name.toLowerCase().contains('release') && !it.name.toLowerCase().startsWith('lint') }
+    if (wantsRelease && !System.getenv("UPLOAD_KEYSTORE_FILE")) {
+        throw new GradleException("Release build requested but UPLOAD_KEYSTORE_FILE is not set. Refusing to fall back to debug signing.")
     }
 }
 

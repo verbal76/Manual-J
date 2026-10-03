@@ -8,6 +8,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       BUILD_SHA: ${{ github.sha }}
+      SIGNING_STATE: DEBUG
+      BUILD_TYPE: debug
       VERSION_CODE: ${{ github.run_number }}
     steps:
       - uses: actions/checkout@v4

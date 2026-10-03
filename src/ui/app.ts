@@ -6,10 +6,13 @@ import { newAssembly, newOpening, newProject, newRoom, sourced, uid } from '../m
 import { ProjectStore } from '../model/persistence';
 import { renderReportHtml } from '../report/report';
 import { h, type Child } from './dom';
-
-declare const __BUILD_SHA__: string; declare const __APP_VERSION__: string;
+import { RUNTIME_VERSION } from '../ota/runtime';
+import { OtaUpdater, type OtaAdapter } from '../ota/updater';
+import { capgoAdapter, isNative } from '../ota/capgoAdapter';
+import { SCHEMA_VERSION } from '../model/factory';
+import { collectDiagnostics, installedVersionCode } from '../release/identity';
 type Tab = 'setup' | 'rooms' | 'results' | 'report';
-type Screen = { n: 'home' } | { n: 'proj'; tab: Tab } | { n: 'room'; id: string; step: number } | { n: 'asm'; kind: AssemblyKind; editId?: string; back: Screen; apply?: (id: string) => void };
+type Screen = { n: 'home' } | { n: 'settings' } | { n: 'about' } | { n: 'proj'; tab: Tab } | { n: 'room'; id: string; step: number } | { n: 'asm'; kind: AssemblyKind; editId?: string; back: Screen; apply?: (id: string) => void };
 
 const DESCRIPTORS: Record<AssemblyKind, Record<string, string[]>> = {
   wall: { Framing: ['2x4', '2x6', 'masonry', 'block', 'log', 'other', 'unknown'], Insulation: ['none', 'fiberglass', 'cellulose', 'foam', 'other', 'unknown'], 'Exterior finish': ['brick', 'siding', 'stucco', 'other', 'unknown'] },
@@ -21,13 +24,37 @@ const DESCRIPTORS: Record<AssemblyKind, Record<string, string[]>> = {
 const FREE_ERA: AssemblyKind[] = ['wall', 'roof-ceiling', 'floor'];
 const CARD_DEG: Record<string, number> = { N: 0, E: 90, S: 180, W: 270 };
 
-export function startApp(root: HTMLElement): void {
+export function startApp(root: HTMLElement, boot: { splashDone: Promise<void> } = { splashDone: Promise.resolve() }): void {
   const store = new ProjectStore(window.localStorage);
   let screen: Screen = { n: 'home' };
   let p: Project | null = null;
   let toast = '';
+  let currentBack: Screen | undefined;
+  let updater: OtaUpdater | null = null;
+  let splashGone = false;
+  const noAdapter: OtaAdapter = { fetchManifest: async () => { throw new Error('web'); }, download: async () => { throw new Error('web'); }, deleteBundle: async () => undefined, activate: async () => undefined, notifyReady: async () => undefined };
 
-  const go = (s: Screen) => { screen = s; render(); window.scrollTo(0, 0); };
+  // Safe moment for an update to reload the app: Home screen, splash finished. Projects autosave on every change.
+  const maybeActivate = () => {
+    if (!updater || !splashGone || updater.state.kind !== 'staged' || screen.n !== 'home') return;
+    void updater.activateIfStaged().then(ok => { if (!ok && updater!.state.kind === 'failed') { toast = 'The update could not be applied. Your projects are safe and the current version keeps running.'; render(); } });
+  };
+  const modal = h('div', { class: 'ota-modal', role: 'alertdialog', 'aria-live': 'assertive', hidden: true }, h('div', { class: 'card ota-panel' }, h('div', { class: 'spinner', 'aria-hidden': 'true' }), h('div', { class: 'ota-msg' }, 'Please wait, applying update')));
+  document.body.append(modal);
+  const syncModal = () => { modal.hidden = updater?.state.kind !== 'applying'; };
+  async function initOta(): Promise<void> {
+    const native = isNative();
+    updater = new OtaUpdater(native ? capgoAdapter : noAdapter,
+      { channel: __OTA_CHANNEL__, runtime: RUNTIME_VERSION, versionCode: native ? await installedVersionCode() : null, currentSeq: __OTA_SEQ__, projectSchema: SCHEMA_VERSION, runningId: __OTA_ID__ },
+      { manifestUrl: native ? __OTA_MANIFEST_URL__ : '', store: window.localStorage, now: Date.now, minIntervalMs: 15 * 60_000, activateTimeoutMs: 20_000 });
+    updater.onChange(() => { syncModal(); maybeActivate(); if (screen.n === 'about') render(); });
+    await updater.confirmStarted(); // tells the platform this bundle's UI came up (otherwise an OTA is rolled back)
+    void updater.check().then(maybeActivate);
+  }
+  if (isNative()) void import('@capacitor/app').then(({ App }) => App.addListener('backButton', () => { if (currentBack) go(currentBack); else void App.exitApp(); }));
+  boot.splashDone.then(() => { splashGone = true; maybeActivate(); });
+
+  const go = (s: Screen) => { screen = s; render(); window.scrollTo(0, 0); maybeActivate(); };
   const commit = () => { if (p) { try { store.save(p); toast = ''; } catch (e) { toast = 'SAVE FAILED: ' + (e as Error).message; } } render(); };
   document.addEventListener('visibilitychange', () => { if (p && document.visibilityState === 'hidden') try { store.save(p); } catch { /* shown on next commit */ } });
 
@@ -49,6 +76,7 @@ export function startApp(root: HTMLElement): void {
 
   // ---- shell ---------------------------------------------------------------
   function shell(title: string, body: Child, backTo?: Screen, nav?: Tab): void {
+    currentBack = backTo;
     const kids: Child[] = [h('header', { class: 'top' }, backTo ? h('button', { onClick: () => go(backTo) }, '‹ Back') : null, h('h1', {}, title)), toast ? h('div', { class: 'banner' }, toast) : null, body];
     if (nav) kids.push(h('nav', { class: 'bottom' }, ([['setup', 'Setup'], ['rooms', 'Rooms'], ['results', 'Results'], ['report', 'Report']] as [Tab, string][]).map(([t, l]) => h('button', { class: nav === t ? 'on' : '', onClick: () => go({ n: 'proj', tab: t }) }, l))));
     root.replaceChildren(...(kids.flat(3).filter(Boolean) as Node[]));
@@ -62,6 +90,8 @@ export function startApp(root: HTMLElement): void {
     try { (document.activeElement as HTMLElement | null)?.blur?.(); do { again = false; renderNow(); } while (again); } finally { rendering = false; }
   }
   function renderNow(): void {
+    if (screen.n === 'settings') return settings();
+    if (screen.n === 'about') return about();
     if (screen.n === 'home' || !p) return home();
     if (screen.n === 'proj') return screen.tab === 'setup' ? setup() : screen.tab === 'rooms' ? roomsTab() : screen.tab === 'results' ? results() : reportTab();
     if (screen.n === 'room') return roomWizard(screen);
@@ -72,13 +102,35 @@ export function startApp(root: HTMLElement): void {
   function home(): void {
     const list = store.list();
     shell('Manual J Survey', [
+      h('button', { class: 'sec big', onClick: () => go({ n: 'settings' }) }, '⚙ Settings'),
       h('button', { class: 'big', onClick: () => { p = newProject('New house'); store.save(p); go({ n: 'proj', tab: 'setup' }); } }, '＋ New project'),
       list.length ? h('h2', {}, 'Saved projects') : h('p', { class: 'mut' }, 'No projects yet.'),
       list.map(x => h('div', { class: 'card' }, h('b', {}, x.name), h('div', { class: 'mut' }, new Date(x.updatedAt).toLocaleString()),
         h('div', { class: 'row' }, h('button', { onClick: () => { try { p = store.load(x.id); go({ n: 'proj', tab: 'rooms' }); } catch (e) { toast = (e as Error).message; render(); } } }, 'Open'),
           h('button', { class: 'danger', onClick: () => { if (confirm(`Delete "${x.name}"?`)) { store.remove(x.id); render(); } } }, 'Delete')))),
-      h('p', { class: 'mut' }, `v${__APP_VERSION__} · build ${__BUILD_SHA__} · Not ACCA-approved. Preliminary survey tool; see report for method limits.`),
+      h('p', { class: 'mut' }, `v${__APP_VERSION__} · build ${__BUILD_SHA__} · Not ACCA-approved. Preliminary survey tool; see report for method limits. Details: Settings → About.`),
     ]);
+  }
+
+  // ---- settings / about ------------------------------------------------------
+  function settings(): void {
+    shell('Settings', [h('div', { class: 'card' }, h('button', { class: 'big', onClick: () => go({ n: 'about' }) }, 'About / release diagnostics ›'))], { n: 'home' });
+  }
+  function about(): void {
+    const body = h('div', {}, h('p', { class: 'mut' }, 'Loading…'));
+    shell('About', body, { n: 'settings' });
+    void collectDiagnostics(updater).then(({ text }) => {
+      if (screen.n !== 'about') return;
+      const pre = h('pre', { class: 'diag' }, text);
+      const copy = async () => {
+        try { await navigator.clipboard.writeText(text); toast = 'Diagnostics copied.'; }
+        catch { const ta = h('textarea', { class: 'diag-copy' }) as HTMLTextAreaElement; ta.value = text; document.body.append(ta); ta.select(); try { document.execCommand('copy'); toast = 'Diagnostics copied.'; } catch { toast = 'Copy failed: select the text above and copy it manually.'; } ta.remove(); }
+        render();
+      };
+      const kids: Node[] = [pre, h('button', { class: 'big', onClick: copy }, 'Copy diagnostics')];
+      if (updater && updater.state.kind !== 'disabled') kids.push(h('button', { class: 'sec big', onClick: () => { void updater!.check({ force: true }).then(() => render()); } }, 'Check for update now'));
+      body.replaceChildren(...kids);
+    });
   }
 
   // ---- setup ---------------------------------------------------------------
@@ -248,4 +300,5 @@ export function startApp(root: HTMLElement): void {
   }
 
   render();
+  void initOta();
 }

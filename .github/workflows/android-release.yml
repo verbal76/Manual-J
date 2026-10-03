@@ -1,0 +1,54 @@
+name: Android release (signed AAB)
+# Opt-in. Produces the Play upload bundle. FAILS HARD if upload-key secrets are missing; never falls back to debug signing.
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      BUILD_SHA: ${{ github.sha }}
+      # Play lineage is separate from sideloaded debug builds (different signing key, so they never replace each other).
+      VERSION_CODE: ${{ github.run_number }}
+      SIGNING_STATE: UPLOAD-KEY
+      BUILD_TYPE: release
+      OTA_MANIFEST_URL: ${{ vars.OTA_MANIFEST_URL }}
+    steps:
+      - name: Require signing secrets
+        env: { KS: '${{ secrets.UPLOAD_KEYSTORE_BASE64 }}', P1: '${{ secrets.UPLOAD_KEYSTORE_PASSWORD }}', A: '${{ secrets.UPLOAD_KEY_ALIAS }}', P2: '${{ secrets.UPLOAD_KEY_PASSWORD }}' }
+        run: |
+          [ -n "$KS" ] && [ -n "$P1" ] && [ -n "$A" ] && [ -n "$P2" ] || { echo "::error::Upload-key secrets are not configured (UPLOAD_KEYSTORE_BASE64, UPLOAD_KEYSTORE_PASSWORD, UPLOAD_KEY_ALIAS, UPLOAD_KEY_PASSWORD). Refusing to build a release."; exit 1; }
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm run typecheck && npm test && npm run validate && npm run build
+      - run: npx cap sync android
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 21 }
+      - name: Decode upload keystore
+        env: { KS: '${{ secrets.UPLOAD_KEYSTORE_BASE64 }}' }
+        run: echo "$KS" | base64 -d > "$RUNNER_TEMP/upload.jks" && echo "UPLOAD_KEYSTORE_FILE=$RUNNER_TEMP/upload.jks" >> "$GITHUB_ENV"
+      - name: Build AAB and release APK
+        working-directory: android
+        env:
+          UPLOAD_KEYSTORE_PASSWORD: ${{ secrets.UPLOAD_KEYSTORE_PASSWORD }}
+          UPLOAD_KEY_ALIAS: ${{ secrets.UPLOAD_KEY_ALIAS }}
+          UPLOAD_KEY_PASSWORD: ${{ secrets.UPLOAD_KEY_PASSWORD }}
+        run: ./gradlew bundleRelease assembleRelease --no-daemon
+      - name: Release identity
+        run: |
+          {
+            echo "### Release build identity"
+            echo "- Branch: ${GITHUB_REF_NAME}"; echo "- SHA: ${GITHUB_SHA}"
+            echo "- versionName: $(node -p "require('./package.json').version")"; echo "- versionCode: ${VERSION_CODE}"
+            echo "- applicationId: $(node -p "require('./capacitor.config.json').appId")"
+            echo "- targetSdk: $(grep -oP 'targetSdkVersion = \K\d+' android/variables.gradle)"
+            echo "- build type: release; signing: upload key (Play App Signing re-signs for distribution)"
+            echo "- run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+          cp android/app/build/outputs/bundle/release/app-release.aab "manual-j-${VERSION_CODE}-${GITHUB_SHA::7}.aab"
+          cp android/app/build/outputs/apk/release/app-release.apk "manual-j-${VERSION_CODE}-${GITHUB_SHA::7}-release.apk"
+      - uses: actions/upload-artifact@v4
+        with: { name: manual-j-release, path: 'manual-j-*' }

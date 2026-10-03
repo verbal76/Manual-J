@@ -18,3 +18,10 @@ nav.bottom button{flex:1;border-radius:0;background:#fff;color:var(--ink);min-he
 .steps{display:flex;gap:6px;margin:6px 0}.steps span{flex:1;height:6px;border-radius:3px;background:#ccd}.steps span.on{background:var(--pri)}
 table.t{width:100%;border-collapse:collapse;font-size:.8rem}table.t td,table.t th{border-bottom:1px solid #dde;padding:3px 4px;text-align:left}table.t td.r{text-align:right}
 iframe{width:100%;height:70vh;border:1px solid #bbb;background:#fff}summary{min-height:44px;display:flex;align-items:center;font-weight:600}
+
+pre.diag{white-space:pre-wrap;word-break:break-word;font:13px/1.35 ui-monospace,monospace;background:#fff;border-radius:12px;padding:12px;box-shadow:0 1px 3px #0002}
+textarea.diag-copy{position:fixed;left:-9999px;top:0}
+.ota-modal{position:fixed;inset:0;background:#000a;display:flex;align-items:center;justify-content:center;z-index:900;touch-action:none}.ota-modal[hidden]{display:none}
+.ota-panel{display:flex;gap:14px;align-items:center;padding:20px 24px;margin:0 16px;font-weight:600}
+.spinner{width:28px;height:28px;border:4px solid #ccd;border-top-color:var(--pri);border-radius:50%;animation:spin 1s linear infinite;flex:none}@keyframes spin{to{transform:rotate(360deg)}}
+.splash{position:fixed;inset:0;background:#000;display:flex;align-items:center;justify-content:center;z-index:1000}.splash img{max-width:100%;max-height:100%;object-fit:contain}

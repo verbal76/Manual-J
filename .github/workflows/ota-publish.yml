@@ -1,0 +1,57 @@
+name: OTA publish
+# Deliberate, manual publication of an over-the-air web-bundle update. Never runs on ordinary pushes.
+# Defaults to a DRY RUN (builds + validates + uploads an artifact, publishes nothing).
+on:
+  workflow_dispatch:
+    inputs:
+      channel: { description: 'OTA channel (must match the channel baked into installed apps)', default: internal, required: true }
+      name: { description: 'Short human-readable OTA name (what changed)', required: true }
+      min_version_code: { description: 'Lowest installed native versionCode that may take this OTA', default: '1', required: true }
+      dry_run: { description: 'true = build/validate only, do not publish', default: 'true', required: true }
+permissions:
+  contents: write
+jobs:
+  ota:
+    runs-on: ubuntu-latest
+    env:
+      OTA_CHANNEL: ${{ inputs.channel }}
+      OTA_SEQ: ${{ github.run_number }}
+      OTA_ID: ota-${{ github.run_number }}
+      OTA_NAME: ${{ inputs.name }}
+      OTA_SOURCE_SHA: ${{ github.sha }}
+      OTA_MIN_VERSION_CODE: ${{ inputs.min_version_code }}
+      # Must equal the manifest URL baked into the installed native build (repository variable). Hosting needs a public location.
+      OTA_MANIFEST_URL: ${{ vars.OTA_MANIFEST_URL }}
+      OTA_URL_BASE: ${{ vars.OTA_URL_BASE }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - name: Validate (typecheck, tests, engine validation)
+        run: npm run typecheck && npm test && npm run validate
+      - name: Require hosting configuration for a real publish
+        if: ${{ inputs.dry_run != 'true' }}
+        run: |
+          [ -n "$OTA_MANIFEST_URL" ] && [ -n "$OTA_URL_BASE" ] || { echo "OTA hosting is not configured (repository variables OTA_MANIFEST_URL / OTA_URL_BASE). Refusing to publish."; exit 1; }
+      - name: Build web bundle with this OTA's identity
+        run: |
+          export OTA_PUBLISHED="$(date -u +%Y-%m-%dT%H:%M:%SZ)"; echo "OTA_PUBLISHED=$OTA_PUBLISHED" >> "$GITHUB_ENV"
+          npm run build
+      - name: Package, hash, manifest (manifest self-validates against the client's rules)
+        run: |
+          export OTA_URL_BASE="${OTA_URL_BASE:-https://example.invalid/dry-run}"
+          mkdir -p out && (cd dist && zip -qr "../out/$OTA_ID.zip" .)
+          unzip -l "out/$OTA_ID.zip" | grep -q ' index.html$'   # index.html must be at the zip root
+          npx tsx scripts/make-manifest.ts "out/$OTA_ID.zip" "out/$OTA_CHANNEL.json" | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with: { name: "ota-${{ github.run_number }}", path: out/ }
+      - name: Publish to the ota branch (immutable zip + channel pointer)
+        if: ${{ inputs.dry_run != 'true' }}
+        run: |
+          git config user.name "github-actions"; git config user.email "actions@users.noreply.github.com"
+          git fetch origin ota || true
+          if git rev-parse --verify origin/ota >/dev/null 2>&1; then git worktree add ../ota-branch origin/ota; else git worktree add --detach ../ota-branch && (cd ../ota-branch && git checkout --orphan ota && git rm -rf . >/dev/null 2>&1 || true); fi
+          cd ../ota-branch && mkdir -p bundles channels
+          cp "$GITHUB_WORKSPACE/out/$OTA_ID.zip" bundles/ && cp "$GITHUB_WORKSPACE/out/$OTA_CHANNEL.json" "channels/$OTA_CHANNEL.json"
+          git add -A && git commit -m "OTA $OTA_ID ($OTA_CHANNEL): $OTA_NAME [$OTA_SOURCE_SHA]" && git push origin HEAD:ota
