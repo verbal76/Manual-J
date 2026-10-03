@@ -1,0 +1,42 @@
+name: Qualify existing APK artifact (read-only; builds nothing)
+# Downloads an ALREADY-BUILT debug APK artifact from a previous run and inspects the actual binary.
+on:
+  push:
+    branches: ['qualify/**']
+permissions:
+  actions: read
+  contents: read
+env:
+  RUN_ID: '37135887707'
+  ARTIFACT: manual-j-debug-apk
+jobs:
+  qualify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.ARTIFACT }}
+          path: art
+          run-id: ${{ env.RUN_ID }}
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+      - name: Inspect
+        shell: bash
+        run: |
+          set +e
+          echo "== ARTIFACT FILES"; ls -l art
+          APK=$(ls art/*.apk | head -1); echo "APK=$APK"
+          echo "== APK SIZE / SHA-256"; stat -c '%n %s bytes' "$APK"; sha256sum "$APK"
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1); echo "== build-tools: $BT"; ls "$BT" | tr '\n' ' '; echo
+          echo "== BADGING (package/version/sdk/permissions/abis)"; "$BT/aapt2" dump badging "$APK" | grep -E "^(package|sdkVersion|minSdkVersion|targetSdkVersion|compileSdkVersion|uses-permission|native-code|application-label:|launchable)" 
+          echo "== PERMISSIONS (aapt2 dump permissions)"; "$BT/aapt2" dump permissions "$APK"
+          echo "== MANIFEST XML TREE"; "$BT/aapt2" dump xmltree --file AndroidManifest.xml "$APK"
+          echo "== APKSIGNER VERIFY"; "$BT/apksigner" verify --verbose --print-certs "$APK"
+          echo "== CERT DETAIL (keytool)"; mkdir -p x && (cd x && unzip -q -o "../$APK" 'META-INF/*' && ls META-INF && for f in META-INF/*.RSA META-INF/*.DSA META-INF/*.EC; do [ -f "$f" ] && keytool -printcert -file "$f"; done)
+          echo "== ZIP LISTING OF lib/"; unzip -l "$APK" | grep -E "lib/|\.so" || echo "NO lib/ ENTRIES (no native libraries)"
+          echo "== ABI DIRS"; unzip -Z1 "$APK" | grep '^lib/' | cut -d/ -f2 | sort -u || true
+          echo "== ELF CHECK"; mkdir -p so && (cd so && unzip -q -o "../$APK" 'lib/*' 2>/dev/null; find . -name '*.so' | while read f; do echo "-- $f"; readelf -lW "$f" | awk '/LOAD/{print $1,$NF}'; done; [ -z "$(find . -name '*.so')" ] && echo "NO .so FILES: ELF 16KB check NOT APPLICABLE")
+          echo "== ZIPALIGN (4-byte) "; "$BT/zipalign" -c -v 4 "$APK" | tail -3; echo "zipalign4 exit=$?"
+          echo "== ZIPALIGN 16KB page-size check"; "$BT/zipalign" -c -P 16 -v 4 "$APK" | tail -5; echo "zipalign16 exit=${PIPESTATUS[0]}"
+          echo "== DEX/ASSET LISTING"; unzip -l "$APK" | grep -E "classes.*dex|assets/public/index.html|assets/capacitor" 
+          exit 0
