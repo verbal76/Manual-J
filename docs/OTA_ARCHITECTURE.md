@@ -18,4 +18,4 @@ Discovery at app start (throttled to once per 15 min; never blocks startup; 10 s
 Identify the running OTA: Settings → About (Running from / OTA id / name / sequence / source commit / published).
 
 ## Honest status
-Logic is unit-tested with a fake adapter (33 tests). Plugin behaviours that can only be proven on a device are UNVERIFIED: checksum reporting/enforcement, rollback timing, reload behaviour, and that no traffic goes to the plugin vendor.
+Logic is unit-tested with a fake adapter (unit tests in tests/ota.test.ts). Plugin behaviours that can only be proven on a device are UNVERIFIED: checksum reporting/enforcement, rollback timing, reload behaviour, and that no traffic goes to the plugin vendor.

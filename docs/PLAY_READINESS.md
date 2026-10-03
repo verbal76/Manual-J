@@ -11,7 +11,7 @@ Status legend: CONFIRMED (from repository) · OWNER-CONFIRM · OWNER-ACTION. Las
 | Play target requirement | API 36 for new apps/updates from 2026-08-31 (extension to 2026-11-01 possible). Source: developer.android.com/google/play/requirements/target-sdk, fetched 2026-10-03 | VERIFIED |
 | Play API compliant | see About / docs history; targetSdk 35 at start of this phase = NO | |
 | Remediation class | Class A candidate (targetSdk/compileSdk 36 + AGP minor bump; Gradle 8.11.1 and JDK 21 already suitable; no framework major upgrade). Proven only by a green CI build and device test; if CI rejects it, revert and treat as Class B | see commit history |
-| Stack | TypeScript, Vite 8-era toolchain, vanilla DOM, Capacitor 7, Gradle 8.11.1, AGP 8.x, JDK 21 (CI) | CONFIRMED |
+| Stack | TypeScript, Vite 8.3, vanilla DOM, Capacitor 7, Gradle 8.11.1, AGP 8.10.1 (8.7.2 before the API-36 change), JDK 21 (CI) | CONFIRMED |
 | APK | debug APK per push (`android.yml`), debug-signed, sideload only | CONFIRMED |
 | AAB | `android-release.yml` (manual). Not yet run: needs upload-key secrets | PREPARED |
 | Signing | Debug today. Release path reads `UPLOAD_KEYSTORE_*`; Gradle and workflow both FAIL HARD when absent — never fall back to debug signing | PREPARED |
