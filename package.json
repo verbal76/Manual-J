@@ -1,0 +1,27 @@
+{
+  "name": "manual-j",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Field-first residential heating/cooling load survey and calculation tool (not ACCA-approved).",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "validate": "tsx scripts/validate.ts",
+    "cap:sync": "npm run build && cap sync android"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.6.9",
+    "@types/node": "^26.6.4",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.2",
+    "vitest": "^5.0.3"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.6.9",
+    "@capacitor/core": "^7.6.9"
+  }
+}
