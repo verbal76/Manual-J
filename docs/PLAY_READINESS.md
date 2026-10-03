@@ -9,7 +9,7 @@ Status legend: CONFIRMED (from repository) · OWNER-CONFIRM · OWNER-ACTION. Las
 | versionCode | env `VERSION_CODE` = GitHub Actions run number (debug workflow) / release workflow run number | CONFIRMED |
 | min / target / compile SDK | see `android/variables.gradle` (single source; About reads it at build time) | CONFIRMED |
 | Play target requirement | API 36 for new apps/updates from 2026-08-31 (extension to 2026-11-01 possible). Source: developer.android.com/google/play/requirements/target-sdk, fetched 2026-10-03 | VERIFIED |
-| Play API compliant | see About / docs history; targetSdk 35 at start of this phase = NO | |
+| Play API compliant | YES by configuration since commit ddf475a (targetSdk 36; CI debug build green, run #5). Device behaviour at API 36 not yet tested. Was NO (targetSdk 35) at the start of this phase | CONFIRMED (config) / OWNER device test |
 | Remediation class | Class A candidate (targetSdk/compileSdk 36 + AGP minor bump; Gradle 8.11.1 and JDK 21 already suitable; no framework major upgrade). Proven only by a green CI build and device test; if CI rejects it, revert and treat as Class B | see commit history |
 | Stack | TypeScript, Vite 8.3, vanilla DOM, Capacitor 7, Gradle 8.11.1, AGP 8.10.1 (8.7.2 before the API-36 change), JDK 21 (CI) | CONFIRMED |
 | APK | debug APK per push (`android.yml`), debug-signed, sideload only | CONFIRMED |
