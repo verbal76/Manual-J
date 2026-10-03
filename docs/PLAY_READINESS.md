@@ -16,7 +16,7 @@ Status legend: CONFIRMED (from repository) · OWNER-CONFIRM · OWNER-ACTION. Las
 | AAB | `android-release.yml` (manual). Not yet run: needs upload-key secrets | PREPARED |
 | Signing | Debug today. Release path reads `UPLOAD_KEYSTORE_*`; Gradle and workflow both FAIL HARD when absent — never fall back to debug signing | PREPARED |
 | Upload key / Play App Signing | None yet | OWNER-ACTION |
-| Permissions | `INTERNET` only (from Capacitor). Plugins add none (App, Device, Updater manifests checked) | CONFIRMED |
+| Permissions | Source says INTERNET only, but the Build 7 APK's merged manifest also had WAKE_LOCK, ACCESS_NETWORK_STATE, RECEIVE_BOOT_COMPLETED, FOREGROUND_SERVICE (transitive WorkManager/Play dependencies of the OTA plugin; an earlier statement that plugins add none was WRONG). RECEIVE_BOOT_COMPLETED and FOREGROUND_SERVICE are now removed via manifest merge rules; WAKE_LOCK and ACCESS_NETWORK_STATE remain (normal-level, used by the plugin stack). Always verify against the built APK. Also: `allowBackup=true` (Android auto-backup may copy app data, including local project data, to the user's Google backup) — owner decision | VERIFIED from APK |
 | Third-party SDKs | Capacitor core/android/app/device; `@capgo/capacitor-updater` (pulls androidx.work, Play app-update, play-services-tasks, okhttp, brotli). Its stats endpoint is disabled (`statsUrl: ""`); no traffic to the plugin vendor is intended — physical/network check recommended | CONFIRMED + OWNER-CONFIRM |
 | Ads / IAP / accounts / login | None | CONFIRMED |
 | Analytics / crash reporting | None | CONFIRMED |
