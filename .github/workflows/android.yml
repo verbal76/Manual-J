@@ -21,7 +21,6 @@ jobs:
       - run: npx cap sync android
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: 21 }
-      - uses: android-actions/setup-android@v3
       - name: Assemble debug APK
         working-directory: android
         run: ./gradlew assembleDebug --no-daemon
