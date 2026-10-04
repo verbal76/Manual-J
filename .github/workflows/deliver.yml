@@ -23,7 +23,9 @@ jobs:
         run: |
           N="${GITHUB_REF_NAME#release/v}"
           [[ "$N" =~ ^[1-9][0-9]*$ ]] || { echo "::error::branch must be release/v<number>"; exit 1; }
-          if gh release view "v$N" >/dev/null 2>&1 || git ls-remote --exit-code --tags origin "refs/tags/v$N" >/dev/null 2>&1; then echo "::error::v$N already exists. Public versions are never reused."; exit 1; fi
+          if gh release view "v$N" >/dev/null 2>&1; then echo "::error::Release v$N already exists. Public versions are never reused."; exit 1; fi
+          # The tag is created beforehand by a person/session with workflow permission (the Actions token may not create
+          # tags on commits whose history touches .github/workflows): git tag -a vN <commit> && git push origin vN
           echo "N=$N" >> "$GITHUB_ENV"
           if [ -f release/existing-run.txt ]; then echo "EXISTING_RUN=$(tr -d '[:space:]' < release/existing-run.txt)" >> "$GITHUB_ENV"; fi
       - name: Reuse the exact verified binary
@@ -95,8 +97,8 @@ jobs:
           - Settings → About in the app shows this version and the technical identifiers.
           NOTES
           sed -i 's/^          //' notes.md
-          git config user.name "github-actions"; git config user.email "actions@users.noreply.github.com"
-          git tag -a "v${N}" "$SOURCE_SHA" -m "Manual J v${N}" && git push origin "v${N}"
+          TAGGED=$(git rev-parse "refs/tags/v${N}^{commit}" 2>/dev/null) || { echo "::error::tag v${N} does not exist; create and push it first"; exit 1; }
+          [ "$TAGGED" = "$SOURCE_SHA" ] || { echo "::error::tag v${N} points to $TAGGED but the binary's source is $SOURCE_SHA"; exit 1; }
           if ! gh release create "v${N}" "$APK" "$APK.sha256.txt" --title "Manual J v${N}" --notes-file notes.md --verify-tag --latest; then
             echo "--- release API diagnostics"; gh api -i -X POST "repos/$GITHUB_REPOSITORY/releases" -f tag_name="v${N}" -f name="Manual J v${N}" -F draft=true 2>&1 | head -30; exit 1
           fi
