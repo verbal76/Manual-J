@@ -1,5 +1,5 @@
 import type { Assembly, CalcResult, Component, HorizontalSurface, Issue, ModeResult, Project, Quality, Room, RoomResult, Sourced } from './types';
-import { cardinalFromHeading, openingArea, roomFloorArea, roomVolume, wallGross, wallNet, wallOpeningArea } from './geometry';
+import { cardinalFromHeading, horizontalArea, openingArea, roomFloorArea, roomVolume, wallGross, wallNet, wallOpeningArea } from './geometry';
 import { validateProject, validateRoom } from './validate';
 import { AIR_LATENT_FACTOR_PER_LB_LB, AIR_SENSIBLE_FACTOR, ENGINE_VERSION, MIN_PER_HR } from './provenance';
 import { GRAINS_PER_LB } from './units';
@@ -19,9 +19,14 @@ export function calculate(p: Project): CalcResult {
   const asm = new Map<string, Assembly>(p.assemblies.map(a => [a.id, a]));
   const q: Record<Quality, number> = { KNOWN: 0, SELECTED: 0, ESTIMATED: 0, DEFAULTED: 0, UNKNOWN: 0 };
   const rooms: RoomResult[] = [];
-  const designBlocked = issues.some(x => x.severity === 'ERROR' && x.where === 'design');
+  const designBlocked = issues.some(x => x.severity === 'ERROR' && (x.where === 'design' || x.where === 'infiltration' || x.where === 'internal gains'));
 
-  for (const r of p.house.rooms) rooms.push(calcRoom(p, r, asm, q, designBlocked));
+  for (const r of p.house.rooms) {
+    try { rooms.push(calcRoom(p, r, asm, q, designBlocked)); }
+    catch (ex) { // never let one malformed room crash the whole app
+      rooms.push({ roomId: r.id, name: r.name, floorAreaFt2: 0, volumeFt3: 0, heating: null, coolingSensible: null, coolingLatent: null, walls: [], issues: [err('INTERNAL', `Internal error while calculating this room: ${(ex as Error).message}`, r.name)] });
+    }
+  }
   const sum = (sel: (r: RoomResult) => ModeResult | null) => rooms.every(r => sel(r)) && rooms.length > 0 ? rooms.reduce((s, r) => s + sel(r)!.btuh, 0) : null;
   const heating = sum(r => r.heating), cs = sum(r => r.coolingSensible), cl = sum(r => r.coolingLatent);
   const notIncluded = [
@@ -54,7 +59,7 @@ function calcRoom(p: Project, r: Room, asm: Map<string, Assembly>, q: Record<Qua
   const getU = (id: string | null, what: string, mode: Mode, comps: Component[]): { u: number; quality: Quality } | null => {
     const a = id ? asm.get(id) : undefined;
     if (!a) { issues.push(err('NO_ASSEMBLY', `${what}: no construction selected.`, r.name)); return null; }
-    if (a.u.value === null || !(a.u.value > 0)) { issues.push(err('U_UNKNOWN', `${what}: construction "${a.name}" has no thermal value (UNKNOWN). Enter a known or estimated value.`, r.name)); return null; }
+    if (a.u.value === null || !(Number.isFinite(a.u.value) && a.u.value > 0 && a.u.value <= 6)) { issues.push(err('U_UNKNOWN', `${what}: construction "${a.name}" has no thermal value (UNKNOWN). Enter a known or estimated value.`, r.name)); return null; }
     if (mode === 'heat') tally(a.u.quality);
     if (a.u.quality === 'ESTIMATED' || a.u.quality === 'DEFAULTED') { if (mode === 'heat') issues.push(info('U_ASSUMED', `${what}: "${a.name}" thermal value is ${a.u.quality}.`, r.name)); }
     void comps; return { u: a.u.value, quality: a.u.quality };
@@ -96,8 +101,9 @@ function calcRoom(p: Project, r: Room, asm: Map<string, Assembly>, q: Record<Qua
       }
     }
     for (const [h, name] of [[r.ceiling, 'ceiling'], [r.floor, 'floor']] as [HorizontalSurface, string][]) {
-      const area = roomFloorArea(r);
+      const area = horizontalArea(r, h);
       if (h.condition === 'conditioned-adjacent') { comps.push({ label: name, kind: name, areaFt2: area, btuh: 0, quality: 'KNOWN', note: 'Conditioned space on other side: no load' }); continue; }
+      if (h.condition === 'exterior' && !(typeof h.areaFt2 === 'number' && h.areaFt2 > 0) && mode === 'heat') issues.push(warn('ROOF_AREA_ASSUMED', `${r.name} ${name} open to outdoors uses the floor area; a sloped or vaulted roof is larger. Enter the actual area for a correct load.`, r.name));
       if (h.condition === 'ground') { issues.push(warn('GROUND_NOT_CALC', `${r.name} ${name} on/below grade: not calculated (no sourced method). Load omitted.`, r.name)); continue; }
       const dT = h.condition === 'exterior' ? (mode === 'heat' ? tIn - tOut : tOut - tIn) : adjDT(mode === 'heat' ? h.adjacentHeatTempF : h.adjacentCoolTempF, `${r.name} ${name}`);
       if (dT === null) continue;

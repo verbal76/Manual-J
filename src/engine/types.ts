@@ -37,6 +37,8 @@ export interface Wall {
 export type HorizontalCondition = 'conditioned-adjacent' | 'unconditioned' | 'exterior' | 'ground';
 export interface HorizontalSurface {
   condition: HorizontalCondition; assemblyId: string | null;
+  /** Surface area when it differs from the room's floor area (sloped/vaulted roof). null = use floor area. */
+  areaFt2?: number | null;
   adjacentHeatTempF: number | null; adjacentCoolTempF: number | null;
 }
 export interface Room {

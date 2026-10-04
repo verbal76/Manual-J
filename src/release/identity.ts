@@ -4,6 +4,7 @@ import { SCHEMA_VERSION } from '../model/factory';
 import { RUNTIME_VERSION } from '../ota/runtime';
 import type { OtaUpdater } from '../ota/updater';
 import { buildDiagnostics, type DiagnosticsInput } from './diagnostics';
+import { formatErrors, recentErrors } from './errorlog';
 
 export const APP_NAME = 'Manual J';
 /** What the owner sees: "v6" for a delivered build; development builds say so and never claim a delivered number. */
@@ -31,7 +32,7 @@ export async function collectDiagnostics(u: OtaUpdater | null): Promise<{ input:
       status: s ? (s.kind === 'staged' ? `staged: ${s.manifest.name}` : s.kind === 'failed' ? `failed: ${s.error}` : s.kind === 'rejected' ? `refused: ${s.reason}` : s.kind) : 'n/a',
       lastCheck: u && u.lastCheckAt ? new Date(u.lastCheckAt).toISOString() : 'never', lastResult: u?.lastResult ?? 'n/a',
     },
-    engine: { version: ENGINE_VERSION, projectSchema: SCHEMA_VERSION },
+    engine: { version: ENGINE_VERSION, projectSchema: SCHEMA_VERSION }, recentErrors: formatErrors(recentErrors()),
   };
   return { input, text: buildDiagnostics(input) };
 }

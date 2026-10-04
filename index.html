@@ -3,7 +3,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#000000"><title>Manual J Survey</title>
 <!-- Hot Attic Games studio card (opaque dark card; only the logo fades in, so the app below never shows through). Static markup so it is the very first thing painted on a cold launch (no blank frame).
-     Artwork: the canonical Hot_Attic_Games_Master_Logo_ALPHA_FINAL.png, used unmodified (transparent PNG, contain-fit). -->
+     Artwork: lossless WebP derived from the canonical Hot_Attic_Games_Master_Logo_ALPHA_FINAL.png (pixel-identical, verified by scripts/verify_splash_asset.py; the master is untouched). -->
 <style>
 html{background:#000}
 #hag-splash{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;
@@ -14,5 +14,5 @@ html{background:#000}
 @keyframes hag-in{to{opacity:1}}
 @media (prefers-reduced-motion:reduce){#hag-splash img{animation:none;opacity:1}#hag-splash.out{transition:none}}
 </style></head>
-<body><div id="hag-splash" aria-label="Hot Attic Games"><img id="hag-logo" alt="Hot Attic Games" src="/Hot_Attic_Games_Master_Logo_ALPHA_FINAL.png" decoding="async"></div>
+<body><div id="hag-splash" aria-label="Hot Attic Games"><img id="hag-logo" alt="Hot Attic Games" src="/src/assets/hag-splash.webp" decoding="async"></div>
 <div id="app"></div><script type="module" src="/src/main.ts"></script></body></html>

@@ -38,3 +38,11 @@ export function formatFtIn(ft: number): string {
   const total = Math.round(ft * 12); const f = Math.trunc(total / 12); const i = Math.abs(total % 12);
   return `${f}'${i}"`;
 }
+
+/** Strict decimal parser for typed numbers: accepts "12", "12.5", "12,5", "-3", ".5"; rejects "1e3", "0x10", "Infinity", "12abc". */
+export function parseNumber(text: string): number | null {
+  const s = text.trim().replace(',', '.');
+  if (!/^-?(\d+\.?\d*|\.\d+)$/.test(s)) return null;
+  const n = Number(s);
+  return Number.isFinite(n) ? n : null;
+}

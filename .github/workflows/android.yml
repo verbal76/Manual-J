@@ -20,6 +20,8 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run validate
+      - name: Splash asset is pixel-identical to the canonical master
+        run: pip install --quiet pillow && python3 scripts/verify_splash_asset.py
       - run: npm run build
       - run: npx cap sync android
       - uses: actions/setup-java@v4
@@ -27,6 +29,10 @@ jobs:
       - name: Assemble debug APK
         working-directory: android
         run: ./gradlew assembleDebug --no-daemon
+      - name: Qualify the built APK (package, SDKs, permissions, signature, 16 KB, splash + icon packaging)
+        run: |
+          set -o pipefail
+          scripts/qualify-apk.sh android/app/build/outputs/apk/debug/app-debug.apk ${{ github.run_number }} | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Name APK with commit
         run: cp android/app/build/outputs/apk/debug/app-debug.apk manual-j-dev-run${{ github.run_number }}-${GITHUB_SHA::7}.apk
       - uses: actions/upload-artifact@v4

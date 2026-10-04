@@ -31,7 +31,7 @@ for (const [name, vp] of [['portrait', { width: 390, height: 800 }], ['landscape
 }
 { // image failure cannot strand the user
   const ctx = await b.newContext({ viewport: { width: 390, height: 800 } }); const pg = await ctx.newPage();
-  await pg.route('**/Hot_Attic_Games_Master_Logo_ALPHA_FINAL*.png', r => r.abort());
+  await pg.route('**/hag-splash*.webp', r => r.abort());
   await pg.goto('http://localhost:4173/'); const t = Date.now(); await pg.waitForSelector('text=New project', { timeout: 8000 });
   await pg.waitForSelector('#hag-splash', { state: 'detached', timeout: 8000 }); ok(Date.now() - t < 3000, 'missing logo image: card removed promptly, app usable'); await ctx.close();
 }

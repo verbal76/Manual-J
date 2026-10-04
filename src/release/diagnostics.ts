@@ -6,6 +6,7 @@ export interface DiagnosticsInput {
   build: { appName: string; publicVersion: string; appVersion: string; sourceSha: string; buildType: string; signing: string; minSdk: number; targetSdk: number; compileSdk: number; runtime: number };
   ota: { enabled: boolean; why?: string; channel: string; runningFrom: 'EMBEDDED' | 'OTA'; id: string; name: string; seq: number; sourceSha: string; published: string; status: string; lastCheck: string; lastResult: string };
   engine: { version: string; projectSchema: number };
+  recentErrors?: string[];
 }
 const v = (x: unknown) => (x === undefined || x === null || x === '' ? 'n/a' : String(x));
 
@@ -22,6 +23,7 @@ export function buildDiagnostics(d: DiagnosticsInput): string {
     `  OTA id: ${v(o.id)}`, `  OTA name: ${v(o.name)}`, `  OTA sequence: ${o.seq}`, `  OTA source commit: ${v(o.sourceSha)}`, `  OTA published: ${v(o.published)}`,
     `  Update state: ${o.status}`, `  Last check: ${o.lastCheck}`, `  Last result: ${o.lastResult}`, '',
     'GOOGLE PLAY / ANDROID', `  minSdk: ${b.minSdk}`, `  targetSdk: ${b.targetSdk}`, `  compileSdk: ${b.compileSdk}`,
-    `  Play required targetSdk: ${PLAY_REQUIRED_TARGET_SDK} (verified ${PLAY_REQUIREMENT_VERIFIED_ON})`, `  Play API compliant: ${playCompliance(b.targetSdk)}`, `  Signing: ${b.signing}`,
+    `  Play required targetSdk: ${PLAY_REQUIRED_TARGET_SDK} (verified ${PLAY_REQUIREMENT_VERIFIED_ON})`, `  Play API compliant: ${playCompliance(b.targetSdk)}`, `  Signing: ${b.signing}`, '',
+    'RECENT ERRORS', ...(d.recentErrors && d.recentErrors.length ? d.recentErrors.map(x => `  ${x}`) : ['  none recorded']),
   ].join('\n');
 }
