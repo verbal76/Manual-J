@@ -76,6 +76,13 @@ jobs:
           echo "TARGET=$("$BT/aapt2" dump badging "$APK" | grep -oP "targetSdkVersion:'\K[0-9]+")" >> "$GITHUB_ENV"
           echo "CERT=$("$BT/apksigner" verify --print-certs "$APK" | grep -m1 'SHA-256' | awk '{print $NF}')" >> "$GITHUB_ENV"
           echo "APKSHA=$(cut -d' ' -f1 "$APK.sha256.txt")" >> "$GITHUB_ENV"
+      - name: Upload the cleanly named artifact (always, so the file exists even if release creation is blocked)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Manual-J-v${{ env.N }}
+          path: |
+            Manual-J-v${{ env.N }}.apk
+            Manual-J-v${{ env.N }}.apk.sha256.txt
       - name: Create the Latest release
         run: |
           APK="Manual-J-v${N}.apk"
