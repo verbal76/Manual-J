@@ -7,4 +7,4 @@
 ## Infrastructure phase (OTA / Play)
 5. **Package ID** — RESOLVED 2026-10-03: changed to com.hotatticgames.manualj before first Play upload (earlier test APKs used com.verbal76.manualj; their local data does not transfer).
 6. **OTA hosting** — STILL OPEN, intentionally undecided (repo stays private; no manifest URL configured; updates disabled). Options: public repo/`ota` branch, or another static host? Needs a public URL (set repo variables OTA_MANIFEST_URL / OTA_URL_BASE, rebuild native with OTA_MANIFEST_URL). Default: keep updates disabled until chosen.
-7. **Canonical Hot Attic Games logo** — add branding/Hot_Attic_Games_Master_Logo.png. Default: no studio card until supplied.
+7. **Canonical Hot Attic Games logo** — RESOLVED 2026-10-04: Hot_Attic_Games_Master_Logo_ALPHA_FINAL.png supplied and wired into the studio splash.

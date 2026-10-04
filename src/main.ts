@@ -1,6 +1,7 @@
 import './ui/style.css';
 import { startApp } from './ui/app';
-import { showSplash } from './ui/splash';
+import { runSplash } from './ui/splash';
 
-const splashDone = showSplash(document.body);
+// The studio card (index.html) is already on screen; the app initialises behind it.
+const splashDone = runSplash();
 startApp(document.getElementById('app')!, { splashDone });

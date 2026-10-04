@@ -1,19 +1,28 @@
-// Hot Attic Games opening studio card: solid black, canonical logo centred and "contained" (never cropped/stretched), ~1.5 s, silent.
-// Uses the exact canonical file. If it is not in the repo, no card is shown (nothing is invented or substituted).
-const found = import.meta.glob('../../branding/Hot_Attic_Games_Master_Logo.png', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
-export const STUDIO_LOGO_URL: string | undefined = Object.values(found)[0];
-export const SPLASH_MS = 1500;
+// Hot Attic Games studio card. The markup and artwork live in index.html (first paint); this module owns the timeline.
+// Cold launch only: it runs once per page load, so background/resume never replays it. A reload that the OTA updater
+// triggers on purpose sets SKIP_KEY so the studio card is not shown a second time right after "applying update".
+export const SPLASH_TOTAL_MS = 2600;        // fade-in 450 + hold 1650 + fade-out 500
+export const SPLASH_FADE_OUT_MS = 500;
+export const SPLASH_HARD_CAP_MS = 6000;     // nothing can strand the user on the card
+export const SKIP_KEY = 'manualj:skipSplashOnce';
 
-/** Resolves when the card is gone (immediately if there is no canonical asset). Shown once per real launch (page load). */
-export function showSplash(host: HTMLElement): Promise<void> {
-  if (!STUDIO_LOGO_URL) return Promise.resolve();
-  const el = document.createElement('div'); el.className = 'splash';
-  const img = new Image(); img.alt = 'Hot Attic Games'; img.decoding = 'async'; img.src = STUDIO_LOGO_URL; el.append(img); host.append(el);
+const safeStorage = <T>(f: () => T, d: T): T => { try { return f(); } catch { return d; } };
+export const markSkipNextSplash = () => safeStorage(() => sessionStorage.setItem(SKIP_KEY, '1'), undefined);
+export const clearSkipNextSplash = () => safeStorage(() => sessionStorage.removeItem(SKIP_KEY), undefined);
+
+/** Resolves when the card is fully gone. Initialization runs concurrently behind it (nothing here awaits the app). */
+export function runSplash(doc: Document = document): Promise<void> {
+  const el = doc.getElementById('hag-splash'); if (!el) return Promise.resolve();
+  if (safeStorage(() => sessionStorage.getItem(SKIP_KEY), null)) { safeStorage(() => sessionStorage.removeItem(SKIP_KEY), undefined); el.remove(); return Promise.resolve(); }
+  const img = doc.getElementById('hag-logo') as HTMLImageElement | null;
+  const reduced = safeStorage(() => matchMedia('(prefers-reduced-motion: reduce)').matches, false);
   return new Promise(resolve => {
-    const done = () => { el.remove(); resolve(); };
-    // Time is measured from when the logo is actually visible; a broken image can't strand startup.
-    const start = () => setTimeout(done, SPLASH_MS);
-    img.complete ? start() : (img.onload = start, img.onerror = done);
-    setTimeout(done, SPLASH_MS + 3000);
+    let finished = false;
+    const finish = () => { if (finished) return; finished = true; el.remove(); resolve(); };
+    const fadeOut = () => { el.classList.add('out'); setTimeout(finish, reduced ? 0 : SPLASH_FADE_OUT_MS); };
+    // Timed from first paint of the card; a broken image skips the card rather than showing an empty one.
+    if (img) { img.onerror = finish; }
+    setTimeout(fadeOut, SPLASH_TOTAL_MS - (reduced ? 0 : SPLASH_FADE_OUT_MS));
+    setTimeout(finish, SPLASH_HARD_CAP_MS);
   });
 }

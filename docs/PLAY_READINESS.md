@@ -26,7 +26,7 @@ Status legend: CONFIRMED (from repository) · OWNER-CONFIRM · OWNER-ACTION. Las
 | Privacy policy | Draft factual text in `docs/PRIVACY_DRAFT.md`; no hosted URL | OWNER-ACTION |
 | Data safety | Preparation: no data collected or shared by the app; OTA check sends a plain HTTPS GET (host sees IP/user-agent). Owner must confirm on the Play form | OWNER-CONFIRM |
 | Content rating | Utility/productivity, no UGC, no ads — owner completes questionnaire | OWNER-ACTION |
-| Store assets | Capacitor default icons only; no feature graphic/screenshots/descriptions; canonical Hot Attic Games logo not in repo | OWNER-ACTION |
+| Store assets | Capacitor default icons only; no feature graphic/screenshots/descriptions; studio logo supplied (Hot_Attic_Games_Master_Logo_ALPHA_FINAL.png, splash only; it is not a launcher icon or Play graphic) | OWNER-ACTION |
 | Internal-testing readiness | NOT READY: needs package-ID decision, upload key + secrets, Play Console app, privacy URL, assets, and a Play-API-compliant build | |
 
 ## Owner actions remaining

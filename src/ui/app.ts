@@ -6,6 +6,7 @@ import { newAssembly, newOpening, newProject, newRoom, sourced, uid } from '../m
 import { ProjectStore } from '../model/persistence';
 import { renderReportHtml } from '../report/report';
 import { h, type Child } from './dom';
+import { clearSkipNextSplash, markSkipNextSplash } from './splash';
 import { RUNTIME_VERSION } from '../ota/runtime';
 import { OtaUpdater, type OtaAdapter } from '../ota/updater';
 import { capgoAdapter, isNative } from '../ota/capgoAdapter';
@@ -37,7 +38,8 @@ export function startApp(root: HTMLElement, boot: { splashDone: Promise<void> } 
   // Safe moment for an update to reload the app: Home screen, splash finished. Projects autosave on every change.
   const maybeActivate = () => {
     if (!updater || !splashGone || updater.state.kind !== 'staged' || screen.n !== 'home') return;
-    void updater.activateIfStaged().then(ok => { if (!ok && updater!.state.kind === 'failed') { toast = 'The update could not be applied. Your projects are safe and the current version keeps running.'; render(); } });
+    markSkipNextSplash(); // the activation reload is not a cold launch: don't replay the studio card
+    void updater.activateIfStaged().then(ok => { if (!ok) clearSkipNextSplash(); if (!ok && updater!.state.kind === 'failed') { toast = 'The update could not be applied. Your projects are safe and the current version keeps running.'; render(); } });
   };
   const modal = h('div', { class: 'ota-modal', role: 'alertdialog', 'aria-live': 'assertive', hidden: true }, h('div', { class: 'card ota-panel' }, h('div', { class: 'spinner', 'aria-hidden': 'true' }), h('div', { class: 'ota-msg' }, 'Please wait, applying update')));
   document.body.append(modal);
