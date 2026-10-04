@@ -93,13 +93,17 @@ export class OtaUpdater {
     this.p.lastResult = `applying OTA #${s.manifest.seq}`; this.save();
     let timer: ReturnType<typeof setTimeout> | undefined;
     const watchdog = new Promise<never>((_, rej) => { timer = setTimeout(() => rej(new Error('activation timed out')), this.opts.activateTimeoutMs); });
-    try { await Promise.race([this.adapter.activate(s.bundleId), watchdog]); }
-    catch (e) {
+    const giveUp = async (e: unknown) => {
       // Activation failed without reloading: stay on the known-good bundle and don't retry this payload.
       if (!this.p.badSeqs.includes(s.manifest.seq)) this.p.badSeqs.push(s.manifest.seq);
       this.p.pending = null; await this.adapter.deleteBundle(s.bundleId).catch(() => undefined);
-      this.fail('could not apply update; previous version kept', e); return false;
-    } finally { clearTimeout(timer); }
+      this.fail('could not apply update; previous version kept', e);
+    };
+    try { await Promise.race([this.adapter.activate(s.bundleId), watchdog]); }
+    catch (e) { await giveUp(e); return false; }
+    finally { clearTimeout(timer); }
+    // If activate() resolved but the page is still alive after the timeout, the reload never happened: don't stay stuck on the overlay.
+    setTimeout(() => { if (this.state.kind === 'applying') void giveUp(new Error('page did not reload after activation')); }, this.opts.activateTimeoutMs);
     return true;
   }
 

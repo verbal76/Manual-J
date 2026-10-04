@@ -18,12 +18,13 @@ const QUALITIES = ['KNOWN', 'SELECTED', 'ESTIMATED', 'DEFAULTED', 'UNKNOWN'];
 function sourcedNum(v: unknown): Sourced<number> {
   if (!isObj(v)) return unknown();
   const value = numOrNull(v.value);
-  const quality = QUALITIES.includes(v.quality) ? v.quality : value === null ? 'UNKNOWN' : 'ESTIMATED';
+  // A number tagged UNKNOWN is contradictory data: keep the number but never present it as better than ESTIMATED.
+  const quality = QUALITIES.includes(v.quality) && v.quality !== 'UNKNOWN' ? v.quality : value === null ? 'UNKNOWN' : 'ESTIMATED';
   return { value, quality: value === null ? 'UNKNOWN' : quality, ...(typeof v.source === 'string' ? { source: v.source } : {}) };
 }
 function normOpening(o: unknown): Opening | null {
   if (!isObj(o)) return null;
-  return { id: strOr(o.id, uid()), kind: o.kind === 'door' ? 'door' : 'window', quantity: numOr(o.quantity, 1), widthFt: numOr(o.widthFt, 0), heightFt: numOr(o.heightFt, 0),
+  return { id: strOr(o.id, uid()), kind: o.kind === 'door' ? 'door' : 'window', quantity: numOr(o.quantity, 0), widthFt: numOr(o.widthFt, 0), heightFt: numOr(o.heightFt, 0),
     assemblyId: typeof o.assemblyId === 'string' ? o.assemblyId : null, shgc: sourcedNum(o.shgc), shading: ['none', 'interior', 'exterior', 'unknown'].includes(o.shading) ? o.shading : 'unknown' };
 }
 function normWall(w: unknown, i: number): Wall | null {
@@ -33,7 +34,7 @@ function normWall(w: unknown, i: number): Wall | null {
     id: strOr(w.id, uid()), label: strOr(w.label, `Wall ${i + 1}`),
     heading: { deg: numOrNull(hd.deg), source: ['manual', 'compass', 'derived'].includes(hd.source) ? hd.source : 'manual', confidence: numOrNull(hd.confidence) },
     lengthFt: numOr(w.lengthFt, 0), heightFt: numOr(w.heightFt, 0),
-    measurement: { method: ['manual', 'device', 'ar'].includes(ms.method) ? ms.method : 'manual', confirmed: ms.confirmed !== false },
+    measurement: (() => { const method = ['manual', 'device', 'ar'].includes(ms.method) ? ms.method : 'manual'; return { method, confirmed: method === 'manual' ? ms.confirmed !== false : ms.confirmed === true }; })(),
     exposure: { type: ['exterior', 'interior-conditioned', 'unconditioned'].includes(ex.type) ? ex.type : 'exterior', ...(typeof ex.adjacentRoomId === 'string' ? { adjacentRoomId: ex.adjacentRoomId } : {}), ...(typeof ex.adjacentWallId === 'string' ? { adjacentWallId: ex.adjacentWallId } : {}), adjacentHeatTempF: numOrNull(ex.adjacentHeatTempF), adjacentCoolTempF: numOrNull(ex.adjacentCoolTempF) },
     assemblyId: typeof w.assemblyId === 'string' ? w.assemblyId : null,
     openings: (Array.isArray(w.openings) ? w.openings : []).map(normOpening).filter((x): x is Opening => !!x),
@@ -97,10 +98,14 @@ export class ProjectStore {
   constructor(private kv: KV) {}
 
   list(): IndexEntry[] {
-    try {
-      const v = JSON.parse(this.kv.getItem(INDEX) ?? '[]');
-      if (Array.isArray(v) && v.every(x => isObj(x) && typeof x.id === 'string')) return v as IndexEntry[];
-    } catch { /* fall through to rebuild */ }
+    let idx: IndexEntry[] | null = null;
+    try { const v = JSON.parse(this.kv.getItem(INDEX) ?? '[]'); if (Array.isArray(v) && v.every(x => isObj(x) && typeof x.id === 'string')) idx = v as IndexEntry[]; } catch { /* rebuild below */ }
+    if (!idx) return this.rebuildIndex();
+    // Reconcile with the records: a record the index forgot (half-failed save) reappears; an entry whose record is gone is dropped.
+    const keys = this.kv.keys?.(); if (!keys) return idx;
+    const have = new Set(keys.filter(k => k.startsWith(PREFIX)).map(k => k.slice(PREFIX.length)));
+    const known = new Set(idx.map(x => x.id));
+    if (idx.every(x => have.has(x.id)) && [...have].every(id => known.has(id))) return idx;
     return this.rebuildIndex();
   }
   /** If the index is damaged but project records exist, rebuild it from the records so projects never "disappear". */
@@ -117,18 +122,23 @@ export class ProjectStore {
   /** Throws on storage failure (quota, disabled storage): callers must surface it. */
   save(p: Project): void {
     p.updatedAt = new Date().toISOString();
-    const json = JSON.stringify(p);
+    const json = JSON.stringify(p); const isNew = this.kv.getItem(KEY(p.id)) === null;
     this.kv.setItem(KEY(p.id), json);
-    if (this.kv.getItem(KEY(p.id)) !== json) throw new Error('Storage did not keep the saved data (read-back mismatch).');
-    const idx = this.list().filter(x => x.id !== p.id); idx.unshift({ id: p.id, name: p.name, updatedAt: p.updatedAt });
-    this.kv.setItem(INDEX, JSON.stringify(idx));
+    if (this.kv.getItem(KEY(p.id)) !== json) { if (isNew) this.kv.removeItem(KEY(p.id)); throw new Error('Storage did not keep the saved data (read-back mismatch).'); }
+    try {
+      const idx = this.list().filter(x => x.id !== p.id); idx.unshift({ id: p.id, name: p.name, updatedAt: p.updatedAt });
+      this.kv.setItem(INDEX, JSON.stringify(idx));
+    } catch (e) { if (isNew) this.kv.removeItem(KEY(p.id)); throw e; } // never leave an invisible orphan record behind
   }
   load(id: string): Project {
     const s = this.kv.getItem(KEY(id));
     if (!s) throw new ProjectLoadError('That project was not found on this device.', 'missing');
     let raw: unknown; try { raw = JSON.parse(s); } catch { throw new ProjectLoadError('The saved data for this project is damaged and could not be read. The data was left untouched.', 'damaged'); }
     const p = migrate(raw); // too-new / damaged throw without modifying anything
-    if (JSON.stringify(p) !== JSON.stringify(raw) && (!isObj(raw) || raw.schemaVersion !== SCHEMA_VERSION || this.structureDiffers(raw as Record<string, any>, p))) this.backup(id, s);
+    if (JSON.stringify(p) !== JSON.stringify(raw) && (!isObj(raw) || raw.schemaVersion !== SCHEMA_VERSION || this.structureDiffers(raw as Record<string, any>, p))) {
+      this.backup(id, s);
+      try { this.kv.setItem(KEY(id), JSON.stringify(p)); } catch { /* repair stays in memory; the original is untouched */ }
+    }
     return p;
   }
   private structureDiffers(raw: Record<string, any>, p: Project): boolean {
@@ -156,6 +166,7 @@ export class ProjectStore {
   }
   remove(id: string): void {
     this.kv.removeItem(KEY(id));
+    for (const b of this.backups(id)) this.kv.removeItem(b);
     this.kv.setItem(INDEX, JSON.stringify(this.list().filter(x => x.id !== id)));
   }
 }

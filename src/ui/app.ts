@@ -43,12 +43,14 @@ export function startApp(root: HTMLElement, boot: { splashDone: Promise<void> } 
   let currentBack: Screen | undefined;
   let updater: OtaUpdater | null = null;
   let splashGone = false;
+  let saveFailed = false;
+  let pointerHeld = false, renderDeferred = false;
   const noAdapter: OtaAdapter = { fetchManifest: async () => { throw new Error('web'); }, download: async () => { throw new Error('web'); }, deleteBundle: async () => undefined, activate: async () => undefined, notifyReady: async () => undefined };
   const say = (kind: 'error' | 'warn' | 'info', text: string) => { notice = { kind, text }; };
 
   // ---- OTA: safe activation point = Home screen, studio card finished. Projects autosave on every change. -------------
   const maybeActivate = () => {
-    if (!updater || !splashGone || updater.state.kind !== 'staged' || screen.n !== 'home') return;
+    if (!updater || !splashGone || updater.state.kind !== 'staged' || screen.n !== 'home' || saveFailed) return;
     markSkipNextSplash(); // the activation reload is not a cold launch: don't replay the studio card
     void updater.activateIfStaged().then(ok => { if (!ok) clearSkipNextSplash(); if (!ok && updater!.state.kind === 'failed') { say('warn', 'The update could not be applied. Your projects are safe and the current version keeps running.'); render(); } });
   };
@@ -60,21 +62,38 @@ export function startApp(root: HTMLElement, boot: { splashDone: Promise<void> } 
     updater = new OtaUpdater(native ? capgoAdapter : noAdapter,
       { channel: __OTA_CHANNEL__, runtime: RUNTIME_VERSION, versionCode: native ? await installedVersionCode() : null, currentSeq: __OTA_SEQ__, projectSchema: SCHEMA_VERSION, runningId: __OTA_ID__ },
       { manifestUrl: native ? __OTA_MANIFEST_URL__ : '', store: window.localStorage, now: Date.now, minIntervalMs: 15 * 60_000, activateTimeoutMs: 20_000 });
-    updater.onChange(() => { syncModal(); maybeActivate(); if (screen.n === 'about') render(); });
+    let lastKind = '';
+    updater.onChange(st => {
+      syncModal();
+      if (lastKind === 'applying' && st.kind === 'failed') { clearSkipNextSplash(); say('warn', 'The update could not be applied. Your projects are safe and the current version keeps running.'); render(); }
+      lastKind = st.kind; maybeActivate(); if (screen.n === 'about') render();
+    });
     await updater.confirmStarted(); // tells the platform this bundle's UI came up (otherwise an OTA is rolled back)
     void updater.check().then(maybeActivate);
   }
   boot.splashDone.then(() => { splashGone = true; maybeActivate(); });
 
-  const go = (s: Screen) => { screen = s; if (notice && notice.kind !== 'error') notice = null; render(); window.scrollTo(0, 0); maybeActivate(); };
+  const go = (s: Screen) => {
+    if (s.n === 'home' && p) { // leaving the project: save, and drop it so a later flush can never write it back (e.g. after Delete)
+      persist();
+      if (saveFailed && !confirm('The latest changes to this project could not be saved. Leave anyway and lose them?')) return;
+      p = null;
+    }
+    screen = s; if (notice && notice.kind !== 'error' && !(s.n === 'home' && notice.text.startsWith('NOT SAVED'))) notice = null; render(); window.scrollTo(0, 0); maybeActivate();
+  };
 
   // ---- persistence + lifecycle ---------------------------------------------------------------------------------------
   const persist = (): boolean => {
     if (!p) return true;
-    try { store.save(p); if (notice?.kind === 'error' && notice.text.startsWith('NOT SAVED')) notice = null; return true; }
-    catch (e) { logError('save', e); say('error', `NOT SAVED: this device refused to store the project (${(e as Error).message}). Free up storage, then change a value again to retry. Nothing is lost while the app stays open.`); return false; }
+    try { store.save(p); saveFailed = false; if (notice?.kind === 'error' && notice.text.startsWith('NOT SAVED')) notice = null; return true; }
+    catch (e) { saveFailed = true; logError('save', e); say('error', `NOT SAVED: this device refused to store the project (${(e as Error).message}). Free up storage, then change a value again to retry. Nothing is lost while the app stays open.`); return false; }
   };
-  const commit = () => { persist(); render(); };
+  const commit = () => { persist(); if (pointerHeld) renderDeferred = true; else render(); };
+  // Tapping a button while a field is focused blurs the field first; its 'change' re-renders and would delete the button
+  // before the click lands (the first tap after typing did nothing). Hold the re-render until the pointer is released.
+  document.addEventListener('mousedown', () => { pointerHeld = true; }, true);
+  const releasePointer = () => setTimeout(() => { pointerHeld = false; if (renderDeferred) { renderDeferred = false; render(); } }, 0);
+  document.addEventListener('mouseup', releasePointer, true); document.addEventListener('touchcancel', releasePointer, true);
   /** Commit a half-typed field and write to storage. Called whenever the app may be about to go away. */
   const flush = () => { (document.activeElement as HTMLElement | null)?.blur?.(); persist(); };
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flush(); });
@@ -130,7 +149,7 @@ export function startApp(root: HTMLElement, boot: { splashDone: Promise<void> } 
   function render(): void {
     // Blurring the focused field fires its pending 'change' (which commits and re-renders); coalesce those.
     if (rendering) { again = true; return; }
-    rendering = true;
+    rendering = true; renderDeferred = false;
     try { (document.activeElement as HTMLElement | null)?.blur?.(); do { again = false; renderNow(); } while (again); if (!firstRendered) { firstRendered = true; try { performance.mark('manualj:first-render'); } catch { /* optional */ } } }
     catch (e) { logError('render', e); root.replaceChildren(h('div', { class: 'card' }, h('h3', {}, 'Something went wrong showing this screen'), h('p', { class: 'mut' }, 'Your saved projects are unaffected.'), h('button', { class: 'big', onClick: () => { screen = { n: 'home' }; p = null; render(); } }, 'Back to projects'))); }
     finally { rendering = false; }
@@ -149,12 +168,12 @@ export function startApp(root: HTMLElement, boot: { splashDone: Promise<void> } 
   function todos(P: Project, res: CalcResult): Todo[] {
     const out: Todo[] = []; const seen = new Set<string>();
     const add = (text: string, to: Screen) => { if (!seen.has(text)) { seen.add(text); out.push({ text, to }); } };
-    for (const x of res.issues) if (x.severity === 'ERROR') add(x.message, x.where === 'NO_ROOMS' || x.code === 'NO_ROOMS' ? { n: 'proj', tab: 'rooms' } : { n: 'proj', tab: 'setup' });
+    for (const x of res.issues) if (x.severity === 'ERROR') add(x.message, x.code === 'NO_ROOMS' ? { n: 'proj', tab: 'rooms' } : x.code === 'INTERNAL' || x.code.startsWith('U_') || x.code === 'DUP_ROOM' ? { n: 'home' } : { n: 'proj', tab: 'setup' });
     for (const rr of res.rooms) {
       const room = P.house.rooms.find(r => r.id === rr.roomId); if (!room) continue;
       for (const x of rr.issues) {
         if (x.severity !== 'ERROR' || x.code === 'ROOM_NOT_CALCULATED') continue;
-        const setupFix = ['NO_ACH', 'NO_DESIGN_TEMPS', 'NO_HUMIDITY'].includes(x.code);
+        const setupFix = ['NO_PERSON_SENS', 'NO_PERSON_LAT'].includes(x.code);
         const step = /ceiling|floor/i.test(x.message) ? 2 : x.code === 'ROOM_DIMS' || x.code === 'ROOM_IMPLAUSIBLE' || x.code === 'OCCUPANTS' || x.code === 'APPLIANCE' ? 0 : 1;
         add(`${setupFix ? '' : room.name + ': '}${x.message}`, setupFix ? { n: 'proj', tab: 'setup' } : { n: 'room', id: room.id, step });
       }
@@ -179,7 +198,7 @@ export function startApp(root: HTMLElement, boot: { splashDone: Promise<void> } 
         h('div', { class: 'row', style: 'margin-top:10px' },
           h('button', { onClick: () => { try { p = store.load(x.id); go({ n: 'proj', tab: 'rooms' }); } catch (e) { p = null; logError('open', e); say('error', (e as Error).message); render(); } } }, 'Open'),
           h('button', { class: 'sec', onClick: () => { try { store.duplicate(x.id); say('info', `Copied "${x.name}".`); } catch (e) { logError('duplicate', e); say('error', (e as ProjectLoadError).message); } render(); } }, 'Copy'),
-          h('button', { class: 'danger', onClick: () => { if (confirm(`Delete "${x.name}" and all its rooms? This cannot be undone.`)) { store.remove(x.id); list = store.list(); render(); } } }, 'Delete')))),
+          h('button', { class: 'danger', onClick: () => { if (confirm(`Delete "${x.name}" and all its rooms? This cannot be undone.`)) { if (p?.id === x.id) p = null; store.remove(x.id); list = store.list(); render(); } } }, 'Delete')))),
       h('div', { class: 'row', style: 'margin-top:14px' }, h('button', { class: 'sec', onClick: () => go({ n: 'settings' }) }, '⚙ Settings')),
       h('p', { class: 'mut' }, `${APP_NAME} ${PUBLIC_VERSION_LABEL}. Preliminary survey tool, not ACCA-approved.`),
     ]);
@@ -369,6 +388,7 @@ export function startApp(root: HTMLElement, boot: { splashDone: Promise<void> } 
     shell(P.name || 'Results', [
       h('div', { class: 'banner warn' }, h('b', {}, 'Preliminary, partial method. '), 'Not ACCA Manual J and not for sizing equipment on its own. Cooling leaves out sun and thermal-mass effects on walls and roofs.'),
       todoCard(items, 'Results are incomplete'),
+      res.omitted.length ? h('div', { class: 'banner warn' }, h('b', {}, 'These totals leave out:'), h('ul', { class: 'iss' }, res.omitted.map(x => h('li', {}, x)))) : null,
       h('div', { class: 'tiles' }, tile('Heating', t.heating), tile('Cooling — sensible', t.coolingSensible), tile('Cooling — latent', t.coolingLatent), tile('Cooling — total', t.coolingTotal, t.coolingTotal === null ? undefined : `${btuhToTons(t.coolingTotal).toFixed(2)} tons`)),
       h('h2', {}, 'By room'),
       res.rooms.map(rr => h('details', { class: 'card' }, h('summary', {}, `${rr.name}: heat ${fmt(rr.heating?.btuh ?? null)} · cool ${fmt(rr.coolingSensible?.btuh ?? null)}`),

@@ -90,3 +90,25 @@ describe('duplicate project', () => {
     c.assemblies[0].u.value = 0.5; s.save(c); expect(calculate(s.load(p.id)).totals.heating).toBeCloseTo(EXPECTED.heating, 6); // original unchanged
   });
 });
+
+describe('persistence edge cases found in review', () => {
+  it('index write failing on a NEW project leaves no orphan record', () => {
+    let n = 0; const kv = memKV({ failWrites: () => false }); const real = kv.setItem; kv.setItem = (k, v) => { if (k === 'manualj:index' && ++n >= 1) throw new DOMException('quota', 'QuotaExceededError'); real(k, v); };
+    const s = new ProjectStore(kv); const p = newProject('X'); expect(() => s.save(p)).toThrow(); expect([...kv.m.keys()].filter(k => k.startsWith('manualj:project:'))).toEqual([]);
+  });
+  it('a record missing from a valid index (half-failed save) is recovered by list()', () => {
+    const kv = memKV(); const s = new ProjectStore(kv); const a = newProject('A'), b = newProject('B'); s.save(a); s.save(b);
+    kv.m.set('manualj:index', JSON.stringify([{ id: a.id, name: 'A', updatedAt: '' }])); expect(s.list().map(x => x.id).sort()).toEqual([a.id, b.id].sort());
+    kv.m.delete(`manualj:project:${a.id}`); expect(s.list().map(x => x.id)).toEqual([b.id]); // ghost entry dropped
+  });
+  it('deleting a project also deletes its backups', () => {
+    const kv = memKV(); const s = new ProjectStore(kv); const p = buildProject(); s.save(p); const key = `manualj:project:${p.id}`;
+    const raw = JSON.parse(kv.m.get(key)!); delete raw.house.rooms[0].floorLevel; kv.m.set(key, JSON.stringify(raw)); s.load(p.id); expect(s.backups(p.id).length).toBe(1);
+    s.remove(p.id); expect([...kv.m.keys()].filter(k => k.includes(p.id))).toEqual([]);
+  });
+  it('a structural repair is written back once, so repeated opens do not keep creating backups', () => {
+    const kv = memKV(); const s = new ProjectStore(kv); const p = buildProject(); s.save(p); const key = `manualj:project:${p.id}`;
+    const raw = JSON.parse(kv.m.get(key)!); delete raw.house.rooms[0].floorLevel; kv.m.set(key, JSON.stringify(raw));
+    for (let i = 0; i < 5; i++) s.load(p.id); expect(s.backups(p.id).length).toBe(1); expect(JSON.parse(kv.m.get(key)!).house.rooms[0].floorLevel).toBe(1);
+  });
+});

@@ -80,11 +80,15 @@ export interface RoomResult {
   heating: ModeResult | null; coolingSensible: ModeResult | null; coolingLatent: ModeResult | null;
   walls: { wallId: string; label: string; cardinal: Cardinal | null; grossFt2: number; openingFt2: number; netFt2: number }[];
   issues: Issue[];
+  /** Things this room's numbers leave out although the user entered them (or the surface exists). */
+  omitted: string[];
 }
 export interface CalcResult {
   engineVersion: string; rooms: RoomResult[]; issues: Issue[];
   totals: { heating: number | null; coolingSensible: number | null; coolingLatent: number | null; coolingTotal: number | null };
   complete: { heating: boolean; coolingSensible: boolean; coolingLatent: boolean };
   notIncluded: string[];
+  /** House-wide list of terms the totals leave out because an input or a method is missing. Non-empty => totals are NOT complete. */
+  omitted: string[];
   qualityCounts: Record<Quality, number>;
 }

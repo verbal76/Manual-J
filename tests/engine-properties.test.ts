@@ -28,7 +28,7 @@ function randomProject(seed: number, opts: { solar?: boolean } = {}): Project {
       if (r() < 0.3) w.openings.push(newOpening('door', 3, 6.67, door.id));
     }
     room.ceiling = pick(r, [{ condition: 'conditioned-adjacent' as const, assemblyId: null, adjacentHeatTempF: null, adjacentCoolTempF: null }, { condition: 'unconditioned' as const, assemblyId: roof.id, adjacentHeatTempF: 25, adjacentCoolTempF: 115 }, { condition: 'exterior' as const, assemblyId: roof.id, adjacentHeatTempF: null, adjacentCoolTempF: null, areaFt2: Math.round(room.lengthFt * room.widthFt * 1.2) }]);
-    room.floor = pick(r, [{ condition: 'conditioned-adjacent' as const, assemblyId: null, adjacentHeatTempF: null, adjacentCoolTempF: null }, { condition: 'unconditioned' as const, assemblyId: flr.id, adjacentHeatTempF: 50, adjacentCoolTempF: 85 }]);
+    room.floor = pick(r, [{ condition: 'conditioned-adjacent' as const, assemblyId: null, adjacentHeatTempF: null, adjacentCoolTempF: null }, { condition: 'unconditioned' as const, assemblyId: flr.id, adjacentHeatTempF: 50, adjacentCoolTempF: 85 }, { condition: 'ground' as const, assemblyId: null, adjacentHeatTempF: null, adjacentCoolTempF: null }]);
     p.house.rooms.push(room);
   }
   return p;
@@ -49,7 +49,7 @@ function oracle(p: Project) {
       H += net * u(w.assemblyId) * dH; CS += net * u(w.assemblyId) * dC;
     }
     for (const h of [room.ceiling, room.floor]) {
-      if (h.condition === 'conditioned-adjacent') continue;
+      if (h.condition === 'conditioned-adjacent' || h.condition === 'ground') continue; // ground is deliberately NOT calculated (reported as omitted)
       const A = typeof h.areaFt2 === 'number' && h.areaFt2 > 0 ? h.areaFt2 : floorA;
       const dH = h.condition === 'exterior' ? dtH : d.heatIndoorF! - h.adjacentHeatTempF!, dC = h.condition === 'exterior' ? dtC : h.adjacentCoolTempF! - d.coolIndoorF!;
       H += A * u(h.assemblyId) * dH; CS += A * u(h.assemblyId) * dC;
@@ -69,6 +69,7 @@ describe('engine vs independent oracle on random valid houses', () => {
     expect(res.issues.filter(x => x.severity === 'ERROR')).toEqual([]);
     for (const rr of res.rooms) expect(rr.issues.filter(x => x.severity === 'ERROR')).toEqual([]);
     const o = oracle(p), t = totals(p); close(t.H, o.H); close(t.CS, o.CS); close(t.CL, o.CL);
+    expect(res.omitted.some(x => /on\/below grade/.test(x))).toBe(p.house.rooms.some(r => r.floor.condition === 'ground'));
   });
 });
 
@@ -97,10 +98,11 @@ describe('physical / structural invariants', () => {
     const before = calculate(p).rooms[0].heating!.btuh; const comp = calculate(p).rooms[0].heating!.components.filter(c => c.label.startsWith(w.label + ' ')).reduce((s, c) => s + c.btuh, 0);
     w.exposure.type = 'interior-conditioned'; close(calculate(p).rooms[0].heating!.btuh, before - comp);
   });
-  it('splitting one room into two identical rooms with the same total volume and envelope keeps infiltration constant', () => {
-    const p = randomProject(9); p.house.rooms.forEach(r => (r.occupants = 0)); const tot = (q: Project) => calculate(q).rooms.reduce((s, r) => s + r.heating!.components.filter(c => c.kind === 'infiltration').reduce((a, c) => a + c.btuh, 0), 0);
-    const a = tot(p); const r0 = p.house.rooms[0]; const clone: Room = structuredClone(r0); clone.id = 'dup'; clone.walls.forEach((w, i) => (w.id = 'd' + i)); p.house.rooms.push(clone);
-    const per = (a - 0) ; expect(tot(p)).toBeGreaterThan(per); // adding a room adds air load (by its volume)
+  it('adding an identical room adds exactly that room\'s infiltration (air load is proportional to modelled volume)', () => {
+    const p = randomProject(9); p.house.rooms.forEach(r => (r.occupants = 0));
+    const air = (q: Project) => calculate(q).rooms.map(r => r.heating!.components.filter(c => c.kind === 'infiltration').reduce((a, c) => a + c.btuh, 0));
+    const before = air(p); const clone: Room = structuredClone(p.house.rooms[0]); clone.id = 'dup'; clone.walls.forEach((w, k) => (w.id = 'd' + k)); p.house.rooms.push(clone);
+    const after = air(p); expect(after.length).toBe(before.length + 1); close(after[after.length - 1], before[0]); close(after.slice(0, -1).reduce((a, b) => a + b, 0), before.reduce((a, b) => a + b, 0));
   });
 });
 

@@ -1,5 +1,6 @@
 import type { Assembly, Issue, Project, Room } from './types';
 import { openingArea, roomFloorArea, wallGross, wallOpeningArea } from './geometry';
+import { usable } from './sourced';
 
 const e = (code: string, message: string, where?: string): Issue => ({ severity: 'ERROR', code, message, where });
 const w = (code: string, message: string, where?: string): Issue => ({ severity: 'WARNING', code, message, where });
@@ -41,6 +42,11 @@ export function validateDesign(p: Project): Issue[] {
     if (v !== null && (!fin(v) || v < 0 || v > LIMITS.grainsMax)) out.push(e('GRAINS_RANGE', `Humidity ratio ${k} must be 0–${LIMITS.grainsMax} grains/lb.`, 'design'));
   if (d.elevationFt !== null && (!fin(d.elevationFt) || d.elevationFt < LIMITS.elevMin || d.elevationFt > LIMITS.elevMax)) out.push(e('ELEV_RANGE', 'Elevation is outside a plausible range.', 'design'));
   for (const [c, v] of Object.entries(d.solarGain)) if (v !== undefined && (!fin(v) || v < 0 || v > LIMITS.solarMax)) out.push(e('SOLAR_RANGE', `Solar gain factor for ${c} must be 0–${LIMITS.solarMax}.`, 'design'));
+  if (d.heatOutdoorF === null || d.heatIndoorF === null) out.push(e('NO_DESIGN_TEMPS_HEAT', 'Enter the heating design temperatures (outdoor and indoor) in Setup.', 'design-heating'));
+  if (d.coolOutdoorF === null || d.coolIndoorF === null) out.push(e('NO_DESIGN_TEMPS_COOL', 'Enter the cooling design temperatures (outdoor and indoor) in Setup.', 'design-cooling'));
+  if (d.outdoorGrainsCool === null || d.indoorGrainsCool === null) out.push(e('NO_HUMIDITY', 'Enter the outdoor and indoor humidity (grains/lb) in Setup for the latent load.', 'design-latent'));
+  if (!usable(p.infiltration.heatAch)) out.push(e('NO_ACH_HEAT', 'Enter the heating-season air changes per hour in Setup.', 'infiltration-heating'));
+  if (!usable(p.infiltration.coolAch)) out.push(e('NO_ACH_COOL', 'Enter the cooling-season air changes per hour in Setup.', 'infiltration-cooling'));
   if (!d.source.trim()) out.push(w('NO_DESIGN_SOURCE', 'Design conditions have no stated source.', 'design'));
   if (d.elevationFt !== null && d.elevationFt > 2000) out.push(w('ELEVATION', 'Elevation is above 2000 ft; no air-density correction is applied, so air-side loads are overstated.', 'design'));
   if (d.elevationFt === null) out.push(i('NO_ELEVATION', 'Elevation not entered (no altitude correction is applied in any case).', 'design'));
@@ -66,6 +72,11 @@ export function validateRoom(p: Project, r: Room): Issue[] {
   }
   if (!Number.isInteger(r.occupants) || r.occupants < 0 || r.occupants > LIMITS.occupantsMax) out.push(e('OCCUPANTS', 'Occupants must be a whole number from 0 to 200.', r.name));
   if (!fin(r.applianceSensibleBtuh) || r.applianceSensibleBtuh < 0 || r.applianceSensibleBtuh > LIMITS.applianceMaxBtuh) out.push(e('APPLIANCE', 'Appliance/lighting gain must be 0 or more (Btu/h).', r.name));
+  const d = p.design;
+  const adjOdd = (heat: number | null, cool: number | null, what: string) => {
+    if (heat !== null && d.heatIndoorF !== null && heat >= d.heatIndoorF) out.push(w('ADJ_WINTER_WARM', `${what}: the winter temperature there (${heat} °F) is not below the indoor heating target, which gives a heating credit. Check it.`, what));
+    if (cool !== null && d.coolIndoorF !== null && cool <= d.coolIndoorF) out.push(w('ADJ_SUMMER_COOL', `${what}: the summer temperature there (${cool} °F) is not above the indoor cooling target, which gives a cooling credit. Check it.`, what));
+  };
   const ids = new Set<string>();
   for (const wall of r.walls) {
     if (ids.has(wall.id)) out.push(e('DUP_WALL', 'Duplicate wall id.', at(wall.label)));
@@ -77,6 +88,9 @@ export function validateRoom(p: Project, r: Room): Issue[] {
     if (wall.heading.source === 'compass' && (wall.heading.confidence ?? 0) < 0.5) out.push(w('LOW_COMPASS', 'Compass reading has low/unknown confidence; confirm orientation manually.', at(wall.label)));
     if (wall.measurement.method !== 'manual' && !wall.measurement.confirmed) out.push(e('UNCONFIRMED_MEASURE', 'Device/camera measurement is not confirmed by the user.', at(wall.label)));
     if (!okAdj(wall.exposure.adjacentHeatTempF) || !okAdj(wall.exposure.adjacentCoolTempF)) out.push(e('ADJ_TEMP_RANGE', 'Adjoining-space temperature is outside a plausible range.', at(wall.label)));
+    else if (wall.exposure.type === 'unconditioned') adjOdd(wall.exposure.adjacentHeatTempF, wall.exposure.adjacentCoolTempF, at(wall.label));
+    if (pos(wall.heightFt) && pos(r.ceilingHeightFt) && Math.abs(wall.heightFt - r.ceilingHeightFt) > 1) out.push(w('WALL_HEIGHT_ODD', `Wall height ${wall.heightFt.toFixed(1)} ft differs from the room's ceiling height ${r.ceilingHeightFt.toFixed(1)} ft; check one of them.`, at(wall.label)));
+    if (r.walls.length === 4 && pos(wall.lengthFt) && pos(r.lengthFt) && pos(r.widthFt) && Math.abs(wall.lengthFt - r.lengthFt) > 1 && Math.abs(wall.lengthFt - r.widthFt) > 1) out.push(w('WALL_LENGTH_ODD', `Wall length ${wall.lengthFt.toFixed(1)} ft matches neither the room length (${r.lengthFt.toFixed(1)} ft) nor width (${r.widthFt.toFixed(1)} ft); check the entry.`, at(wall.label)));
     if (wallOpeningArea(wall) > wallGross(wall) + 1e-9) out.push(e('OPENING_TOO_BIG', 'Openings are larger than the wall.', at(wall.label)));
     for (const o of wall.openings) {
       if (!pos(o.widthFt) || !pos(o.heightFt) || !Number.isInteger(o.quantity) || o.quantity < 1)
@@ -88,6 +102,7 @@ export function validateRoom(p: Project, r: Room): Issue[] {
   }
   for (const [h, name] of [[r.ceiling, 'Ceiling'], [r.floor, 'Floor']] as const) {
     if (!okAdj(h.adjacentHeatTempF) || !okAdj(h.adjacentCoolTempF)) out.push(e('ADJ_TEMP_RANGE', 'Adjoining-space temperature is outside a plausible range.', at(name)));
+    else if (h.condition === 'unconditioned') adjOdd(h.adjacentHeatTempF, h.adjacentCoolTempF, at(name));
     if (h.areaFt2 !== undefined && h.areaFt2 !== null) {
       const fa = roomFloorArea(r);
       if (!pos(h.areaFt2) || h.areaFt2 > 100000) out.push(e('AREA_RANGE', `${name} area must be a positive number.`, at(name)));

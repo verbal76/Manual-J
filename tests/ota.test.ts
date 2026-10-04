@@ -82,6 +82,12 @@ describe('updater state machine', () => {
     const { u } = mk({ activate: () => new Promise<void>(() => undefined) }); await u.check();
     expect(await u.activateIfStaged()).toBe(false); expect(u.state.kind).toBe('failed');
   });
+  it('activation that resolves but never reloads the page does not leave the overlay state forever', async () => {
+    const { u, calls } = mk({ activate: async () => undefined }); await u.check();
+    expect(await u.activateIfStaged()).toBe(true); expect(u.state.kind).toBe('applying');
+    await new Promise(r => setTimeout(r, 120)); // activateTimeoutMs is 50 in these tests
+    expect(u.state.kind).toBe('failed'); expect(calls).toContain('delete:b5');
+  });
   it('rollback detected on next start: pending seq != running seq -> marked bad, reported', async () => {
     const store = mem(); const a = mk({}, {}, store); await a.u.check(); void a.u.activateIfStaged(); await new Promise(r => setTimeout(r, 0));
     const restarted = mk({}, { currentSeq: 4 }, store); // old bundle still running = platform rolled back
