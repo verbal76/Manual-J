@@ -11,4 +11,5 @@
 
 ## History and mapping (established 2026-10-04)
 No GitHub Releases or tags existed. Delivered playable builds (those presented to the owner for install/test), oldest first: Actions run #3 (first APK) = **v1**; run #5 (About/OTA/splash code, API 36) = **v2**; run #6 (docs-only rebuild, presented as newest) = **v3**; run #7 (package ID com.hotatticgames.manualj) = **v4**; run #8 = **v5** (current; versionCode 8, source 0b60439, passed binary qualification). Runs #1/#2 failed and #4 was never presented. Earlier builds (v1–v4) have no release artifacts and are not republished. v1–v3 used package com.verbal76.manualj.
-Next delivered build: **Manual J v6**.
+Next delivered build: **Manual J v6** (this is the production-readiness candidate: hardened engine, redesigned UI, new icon, studio splash, stable debug key).
+The delivered APK is also self-qualified in CI by `scripts/qualify-apk.sh` (package, SDKs, permissions, signature, 16 KB, splash + icon packaging).

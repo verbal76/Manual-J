@@ -13,3 +13,5 @@ Engineering rule: no unsourced constants. Unknown values stay UNKNOWN and block 
 Release/OTA/Play: `docs/PLAY_READINESS.md`, `docs/OTA_ARCHITECTURE.md`, `docs/RELEASE_IDENTITY_UI.md`, `docs/PRIVACY_DRAFT.md`. Workflows: `android.yml` (debug APK), `android-release.yml` (signed AAB, manual), `ota-publish.yml` (OTA, manual, dry-run default).
 
 Release/version naming: `docs/RELEASING.md` (public version is `Manual J v<N>`; next is in `release/VERSION`).
+
+Review/validation docs: `docs/ENGINEERING_REVIEW.md` (formulas, assumptions, findings), `docs/OPEN_ITEMS.md` (single reassessed open list), `docs/VALIDATION_RESULTS.md`.

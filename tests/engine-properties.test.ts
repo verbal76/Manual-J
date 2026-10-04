@@ -169,3 +169,12 @@ describe('internal failure containment', () => {
     expect(res!.totals.heating).toBeNull();
   });
 });
+
+describe('performance guard', () => {
+  it('a large house (60 rooms, 8 openings per wall) calculates well under 250 ms', () => {
+    const p = randomProject(7); const base = p.house.rooms[0]; p.house.rooms = [];
+    for (let k = 0; k < 60; k++) { const r: Room = structuredClone(base); r.id = 'r' + k; r.walls.forEach((w, i) => { w.id = `w${k}_${i}`; w.exposure = { type: 'exterior', adjacentHeatTempF: null, adjacentCoolTempF: null }; w.openings = Array.from({ length: 8 }, () => { const o = newOpening('window', 3, 4, p.assemblies.find(a => a.kind === 'window')!.id); o.shgc = sourced(0.4, 'KNOWN'); return o; }); }); r.ceiling = { condition: 'unconditioned', assemblyId: p.assemblies.find(a => a.kind === 'roof-ceiling')!.id, adjacentHeatTempF: 30, adjacentCoolTempF: 110 }; p.house.rooms.push(r); }
+    const t0 = performance.now(); const res = calculate(p); const ms = performance.now() - t0;
+    expect(res.totals.heating).not.toBeNull(); expect(ms).toBeLessThan(250);
+  });
+});

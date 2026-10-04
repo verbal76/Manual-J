@@ -18,6 +18,14 @@ android {
     }
     def uploadKeystore = System.getenv("UPLOAD_KEYSTORE_FILE")
     signingConfigs {
+        // PUBLIC, non-secret debug key committed on purpose: every test build is signed identically, so a new test build
+        // updates the installed one in place (no uninstall, no lost projects). It is never used for release builds.
+        debug {
+            storeFile file('debug.keystore')
+            storePassword 'android'
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+        }
         release {
             if (uploadKeystore) {
                 storeFile file(uploadKeystore)
@@ -28,6 +36,9 @@ android {
         }
     }
     buildTypes {
+        debug {
+            signingConfig signingConfigs.debug
+        }
         release {
             signingConfig signingConfigs.release
             minifyEnabled false

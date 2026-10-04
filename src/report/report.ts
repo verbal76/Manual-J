@@ -10,7 +10,7 @@ const qBadge = (q: Quality) => `<span class="q q-${q}">${q}</span>`;
 function modeTable(m: ModeResult | null, label: string): string {
   if (!m) return `<p class="bad"><b>${esc(label)}:</b> not calculated (see issues).</p>`;
   const rows = m.components.map(c => `<tr><td>${esc(c.label)}</td><td class="r">${c.areaFt2 !== undefined ? c.areaFt2.toFixed(1) : ''}</td><td class="r">${c.u !== undefined ? c.u.toFixed(3) : ''}</td><td class="r">${c.deltaT !== undefined ? c.deltaT.toFixed(0) : ''}</td><td class="r">${n0(c.btuh)}</td><td>${qBadge(c.quality)}${c.note ? ' ' + esc(c.note) : ''}</td></tr>`).join('');
-  return `<h4>${esc(label)}: ${n0(m.btuh)} Btu/h</h4><table><tr><th>Item</th><th>ft²</th><th>U</th><th>ΔT °F</th><th>Btu/h</th><th>Basis</th></tr>${rows}</table>`;
+  return `<h4>${esc(label)}: ${n0(m.btuh)} Btu/h</h4><div class="tw"><table><tr><th>Item</th><th>ft²</th><th>U</th><th>ΔT °F</th><th>Btu/h</th><th>Basis</th></tr>${rows}</table></div>`;
 }
 
 export function renderReportHtml(p: Project, r: CalcResult): string {
@@ -21,13 +21,13 @@ export function renderReportHtml(p: Project, r: CalcResult): string {
     const room = p.house.rooms[i];
     const walls = room.walls.map((w, k) => `<tr><td>${esc(w.label)}</td><td>${cardinalFromHeading(w.heading.deg) ?? '?'} ${w.heading.deg === null ? '' : Math.round(w.heading.deg) + '° (' + w.heading.source + ')'}</td><td>${formatFtIn(w.lengthFt)} × ${formatFtIn(w.heightFt)}</td><td class="r">${rr.walls[k].grossFt2.toFixed(1)}</td><td class="r">${rr.walls[k].openingFt2.toFixed(1)}</td><td class="r">${rr.walls[k].netFt2.toFixed(1)}</td><td>${esc(w.exposure.type)}</td><td>${esc(p.assemblies.find(a => a.id === w.assemblyId)?.name ?? 'none')}</td><td>${w.openings.map(o => `${o.quantity}× ${esc(o.kind)} ${formatFtIn(o.widthFt)}×${formatFtIn(o.heightFt)}`).join('; ') || '—'}</td></tr>`).join('');
     return `<section class="room"><h3>${esc(rr.name)}</h3><p>${room.lengthFt}×${room.widthFt} ft, ceiling ${room.ceilingHeightFt} ft · floor ${rr.floorAreaFt2.toFixed(0)} ft² · volume ${rr.volumeFt3.toFixed(0)} ft³ · ceiling: ${esc(room.ceiling.condition)} · floor: ${esc(room.floor.condition)}</p>
-<table><tr><th>Wall</th><th>Facing</th><th>Size</th><th>Gross</th><th>Openings</th><th>Net</th><th>Exposure</th><th>Construction</th><th>Openings</th></tr>${walls}</table>
+<div class="tw"><table><tr><th>Wall</th><th>Facing</th><th>Size</th><th>Gross</th><th>Openings</th><th>Net</th><th>Exposure</th><th>Construction</th><th>Openings</th></tr>${walls}</table></div>
 ${modeTable(rr.heating, 'Heating')}${modeTable(rr.coolingSensible, 'Cooling – sensible (incomplete method)')}${modeTable(rr.coolingLatent, 'Cooling – latent')}
 ${rr.issues.length ? `<ul>${rr.issues.map(x => `<li class="${x.severity}"><b>${x.severity}</b> ${esc(x.message)}</li>`).join('')}</ul>` : ''}</section>`;
   }).join('');
   const assumed = p.assemblies.map(a => `<tr><td>${esc(a.name)}</td><td>${esc(a.kind)}</td><td>${esc(Object.values(a.descriptors).join(', '))}</td><td class="r">${a.u.value === null ? '—' : a.u.value.toFixed(3)}</td><td>${qBadge(a.u.quality)} ${esc(a.u.source ?? '')}</td></tr>`).join('');
-  return `<!doctype html><html><head><meta charset="utf-8"><title>Load report – ${esc(p.name)}</title><style>
-body{font:14px/1.4 system-ui,sans-serif;margin:16px;color:#111}table{border-collapse:collapse;width:100%;margin:6px 0 12px}td,th{border:1px solid #bbb;padding:3px 6px;text-align:left}.r{text-align:right}
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Load report – ${esc(p.name)}</title><style>
+body{font:14px/1.4 system-ui,sans-serif;margin:16px;color:#111;max-width:900px}.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}table{border-collapse:collapse;width:100%;margin:6px 0 12px}td,th{border:1px solid #bbb;padding:3px 6px;text-align:left}.r{text-align:right}
 .q{font-size:11px;padding:1px 5px;border-radius:4px;background:#ddd}.q-ESTIMATED,.q-DEFAULTED{background:#ffd9a0}.q-UNKNOWN{background:#f5a3a3}.q-KNOWN{background:#bfe8bf}.bad,.ERROR{color:#b00020}.WARNING{color:#8a5a00}.banner{border:2px solid #b00020;padding:8px;margin:8px 0}
 .room{page-break-inside:avoid;border-top:2px solid #333;margin-top:14px}</style></head><body>
 <h1>Residential load survey report</h1>

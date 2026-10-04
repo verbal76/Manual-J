@@ -305,7 +305,7 @@ export function startApp(root: HTMLElement, boot: { splashDone: Promise<void> } 
     if (s.step === 3) body.push(roomReview(r));
     body.push(h('div', { class: 'actionbar' }, s.step > 0 ? h('button', { class: 'sec', onClick: () => step(s.step - 1) }, '‹ Back') : h('button', { class: 'sec', onClick: () => go({ n: 'proj', tab: 'rooms' }) }, 'Rooms'),
       s.step < 3 ? h('button', { onClick: () => step(s.step + 1) }, 'Next ›') : h('button', { onClick: () => go({ n: 'proj', tab: 'rooms' }) }, 'Done')));
-    shell(r.name, body, { n: 'proj', tab: 'rooms' });
+    shell(r.name, body, s.step > 0 ? { n: 'room', id: r.id, step: s.step - 1 } : { n: 'proj', tab: 'rooms' }); // Android back steps back through the wizard
   }
   function roomBasics(r: Room): Child {
     const resync = (apply: () => void) => { const old = { L: r.lengthFt, W: r.widthFt, H: r.ceilingHeightFt }; apply();
@@ -387,11 +387,19 @@ export function startApp(root: HTMLElement, boot: { splashDone: Promise<void> } 
     const fileName = `${P.name.replace(/[^\w-]+/g, '_') || 'report'}-load-report.html`;
     const file = new File([html], fileName, { type: 'text/html' });
     const save = async () => {
+      if (isNative()) { // Android WebView has no Web Share / blob download: write the file and open the system share sheet
+        try {
+          const [{ Filesystem, Directory, Encoding }, { Share }] = await Promise.all([import('@capacitor/filesystem'), import('@capacitor/share')]);
+          const w = await Filesystem.writeFile({ path: `reports/${fileName}`, data: html, directory: Directory.Cache, encoding: Encoding.UTF8, recursive: true });
+          await Share.share({ title: `${P.name} load report`, text: `Manual J load report: ${P.name}`, files: [w.uri], dialogTitle: 'Share or save report' });
+        } catch (e) { if (!/cancel|dismiss/i.test((e as Error).message ?? '')) { logError('share-report', e); say('error', `Could not share the report: ${(e as Error).message}`); render(); } }
+        return;
+      }
       try { if ((navigator as any).canShare?.({ files: [file] })) { await (navigator as any).share({ files: [file], title: P.name }); return; } } catch (e) { if ((e as Error).name === 'AbortError') return; }
       const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = fileName; document.body.append(a); a.click(); a.remove();
     };
     const frame = h('iframe', { title: 'Report', class: 'report' }) as HTMLIFrameElement; frame.srcdoc = html;
-    shell(P.name || 'Report', [h('div', { class: 'row' }, h('button', { onClick: save }, 'Share / save report'), h('button', { class: 'sec', onClick: () => frame.contentWindow?.print() }, 'Print')), frame], { n: 'home' }, 'report');
+    shell(P.name || 'Report', [h('div', { class: 'row' }, h('button', { onClick: save }, 'Share / save report'), isNative() ? null : h('button', { class: 'sec', onClick: () => frame.contentWindow?.print() }, 'Print')), frame], { n: 'home' }, 'report');
   }
 
   render();

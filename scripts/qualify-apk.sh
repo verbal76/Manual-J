@@ -23,6 +23,10 @@ ALLOW="android.permission.INTERNET android.permission.WAKE_LOCK android.permissi
 for perm in $(echo "$BADGE" | sed -n "s/^uses-permission: name='\([^']*\)'.*/\1/p"); do case " $ALLOW " in *" $perm "*) ok "permission $perm";; *) fail "unexpected permission $perm";; esac; done
 # signature
 "$BT/apksigner" verify --print-certs "$APK" > /tmp/apksigner.out 2>&1 && ok "signature verifies ($(grep -m1 'SHA-256' /tmp/apksigner.out | awk '{print $NF}'))" || { fail "apksigner verify failed"; cat /tmp/apksigner.out | head -5; }
+if [ "${EXPECT_DEBUGGABLE:-true}" = "true" ]; then
+  cert=$(grep -m1 'SHA-256' /tmp/apksigner.out | awk '{print $NF}'); want_cert=56bf3bc69135d2ac1d8b1800235afd72ca2cbbedfbbfb29c177dc9853ed35227
+  [ "$cert" = "$want_cert" ] && ok "signed with the stable public debug key (builds update in place)" || fail "debug certificate $cert is not the stable debug key $want_cert"
+fi
 # debuggable flag
 dbg=$("$BT/aapt2" dump xmltree --file AndroidManifest.xml "$APK" | grep -c 'debuggable.*=true')
 if [ "${EXPECT_DEBUGGABLE:-true}" = "true" ]; then [ "$dbg" -ge 1 ] && ok "debuggable (debug build)" || fail "debug build is not debuggable"; else [ "$dbg" -eq 0 ] && ok "not debuggable" || fail "release build is debuggable"; fi

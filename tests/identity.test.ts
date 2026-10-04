@@ -27,3 +27,12 @@ describe('package identity does not drift', () => {
     }
   });
 });
+
+describe('debug signing is stable', () => {
+  it('a public debug keystore is committed and wired to the debug build type (so test builds update in place); release never uses it', () => {
+    expect(existsSync('android/app/debug.keystore')).toBe(true);
+    const g = read('android/app/build.gradle');
+    expect(g).toMatch(/debug\s*\{\s*storeFile file\('debug\.keystore'\)/); expect(g).toMatch(/buildTypes\s*\{\s*debug\s*\{\s*signingConfig signingConfigs\.debug/);
+    expect(g).toMatch(/release\s*\{[^}]*signingConfig signingConfigs\.release/);
+  });
+});
