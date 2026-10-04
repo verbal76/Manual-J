@@ -68,6 +68,11 @@ jobs:
           (cd android && ./gradlew assembleDebug --no-daemon)
           cp android/app/build/outputs/apk/debug/app-debug.apk "Manual-J-v${N}.apk"
           echo "SOURCE_SHA=$GITHUB_SHA" >> "$GITHUB_ENV"; echo "ORIGIN=built by this workflow run ${GITHUB_RUN_ID}" >> "$GITHUB_ENV"
+      - name: Qualify the APK being released (package, SDKs, permissions, signature, 16 KB, splash + icon)
+        if: ${{ env.EXISTING_RUN == '' }}
+        run: |
+          set -o pipefail
+          scripts/qualify-apk.sh "Manual-J-v${N}.apk" "$((100 + N))" | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Inspect the binary actually being released
         run: |
           APK="Manual-J-v${N}.apk"; BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
@@ -104,7 +109,11 @@ jobs:
           - Settings → About in the app shows this version and the technical identifiers.
           NOTES
           sed -i 's/^          //' notes.md
-          TAGGED=$(git rev-parse "refs/tags/v${N}^{commit}" 2>/dev/null) || { echo "::error::tag v${N} does not exist; create and push it first"; exit 1; }
+          if ! TAGGED=$(git rev-parse "refs/tags/v${N}^{commit}" 2>/dev/null); then
+            echo "::warning::Tag v${N} does not exist, so no GitHub Release was created. The APK is available as the Actions artifact Manual-J-v${N}."
+            { echo "### Manual J v${N}: artifact built, GitHub Release NOT created"; echo "No tag v${N} exists (the Actions token may not create tags on commits containing workflow files). Create it, then re-run: git tag -a v${N} ${SOURCE_SHA} -m 'Manual J v${N}' && git push origin v${N}, or create the release by hand and attach Manual-J-v${N}.apk from the artifact."; } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
           [ "$TAGGED" = "$SOURCE_SHA" ] || { echo "::error::tag v${N} points to $TAGGED but the binary's source is $SOURCE_SHA"; exit 1; }
           if ! gh release create "v${N}" "$APK" "$APK.sha256.txt" --title "Manual J v${N}" --notes-file notes.md --verify-tag --latest; then
             echo "--- release API diagnostics"; gh api -i -X POST "repos/$GITHUB_REPOSITORY/releases" -f tag_name="v${N}" -f name="Manual J v${N}" -F draft=true 2>&1 | head -30; exit 1
