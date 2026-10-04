@@ -1,0 +1,14 @@
+# Release and version convention (studio standard)
+**The only version the owner should ever need is: `Manual J v<number>`.** Plain sequential integers: v1, v2, v3 … No semver, no codenames (b9, rc, final, poc …).
+
+- **Public short name:** Manual J. **Artifacts:** `Manual-J-v<N>.apk` (future AAB: `Manual-J-v<N>.aab`). **GitHub Release title:** `Manual J v<N>`, marked **Latest**, tag `v<N>`.
+- Every NEW playable build intentionally delivered for testing/release gets the next number. Never reuse a number or overwrite a release with a different binary (the deliver workflow refuses if tag `vN` exists). Failed or developer-only CI builds do not consume numbers.
+- Technical identifiers (Git SHA, Android versionCode, package ID, runtime version, OTA id/channel/sequence, API level, CI run, signing cert, checksums) are engineering metadata. They live inside the release notes, Settings → About / Copy diagnostics, and CI logs — never in the primary filename or title.
+- **Single source:** `release/VERSION` holds the number of the NEXT delivered build. Vite reads it (About, Home line, report), the delivery workflow checks it, and Android versionCode for delivered builds is `100 + N` (monotonic with N). Development builds from `android.yml` are labelled "development build, not delivered" and are named `manual-j-dev-…`; they are not releases.
+- **How to deliver vN:** make sure `release/VERSION` = N on the commit, push a branch named `release/vN`; `.github/workflows/deliver.yml` builds, tests, creates the release (title, filename, Latest, provenance notes). After delivering, bump `release/VERSION` to N+1 in the next commit.
+- **Re-presenting an existing verified binary:** put `release/existing-run.txt` (Actions run id) and `release/existing-sha256.txt` on the release branch; the exact binary is attached unchanged (used for v5).
+- OTA: an OTA revision is internal (`ota-<seq>`); the public version stays the delivered native/product version unless the owner is delivered a new build.
+
+## History and mapping (established 2026-10-04)
+No GitHub Releases or tags existed. Delivered playable builds (those presented to the owner for install/test), oldest first: Actions run #3 (first APK) = **v1**; run #5 (About/OTA/splash code, API 36) = **v2**; run #6 (docs-only rebuild, presented as newest) = **v3**; run #7 (package ID com.hotatticgames.manualj) = **v4**; run #8 = **v5** (current; versionCode 8, source 0b60439, passed binary qualification). Runs #1/#2 failed and #4 was never presented. Earlier builds (v1–v4) have no release artifacts and are not republished. v1–v3 used package com.verbal76.manualj.
+Next delivered build: **Manual J v6**.

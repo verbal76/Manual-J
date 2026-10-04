@@ -5,7 +5,9 @@ import { RUNTIME_VERSION } from '../ota/runtime';
 import type { OtaUpdater } from '../ota/updater';
 import { buildDiagnostics, type DiagnosticsInput } from './diagnostics';
 
-export const APP_NAME = 'Manual J Survey';
+export const APP_NAME = 'Manual J';
+/** What the owner sees: "v6" for a delivered build; development builds say so and never claim a delivered number. */
+export const PUBLIC_VERSION_LABEL = __DELIVERED__ ? `v${__PUBLIC_VERSION__}` : `v${__PUBLIC_VERSION__} (development build, not delivered)`;
 
 async function nativeInfo(): Promise<DiagnosticsInput['native'] & { buildNumber?: number }> {
   const platform = Capacitor.getPlatform();
@@ -22,7 +24,7 @@ export async function collectDiagnostics(u: OtaUpdater | null): Promise<{ input:
   const s = u?.state;
   const input: DiagnosticsInput = {
     capturedAt: new Date().toISOString(), native: n,
-    build: { appName: APP_NAME, appVersion: __APP_VERSION__, sourceSha: __BUILD_SHA__, buildType: __BUILD_TYPE__, signing: __SIGNING_STATE__, minSdk: __MIN_SDK__, targetSdk: __TARGET_SDK__, compileSdk: __COMPILE_SDK__, runtime: RUNTIME_VERSION },
+    build: { appName: APP_NAME, publicVersion: PUBLIC_VERSION_LABEL, appVersion: __APP_VERSION__, sourceSha: __BUILD_SHA__, buildType: __BUILD_TYPE__, signing: __SIGNING_STATE__, minSdk: __MIN_SDK__, targetSdk: __TARGET_SDK__, compileSdk: __COMPILE_SDK__, runtime: RUNTIME_VERSION },
     ota: {
       enabled: !!u && s?.kind !== 'disabled', why: s?.kind === 'disabled' ? s.why : undefined, channel: __OTA_CHANNEL__,
       runningFrom: __OTA_SEQ__ > 0 ? 'OTA' : 'EMBEDDED', id: __OTA_ID__, name: __OTA_NAME__, seq: __OTA_SEQ__, sourceSha: __OTA_SHA__, published: __OTA_PUBLISHED__,

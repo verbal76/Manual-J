@@ -10,7 +10,7 @@ import { RUNTIME_VERSION } from '../ota/runtime';
 import { OtaUpdater, type OtaAdapter } from '../ota/updater';
 import { capgoAdapter, isNative } from '../ota/capgoAdapter';
 import { SCHEMA_VERSION } from '../model/factory';
-import { collectDiagnostics, installedVersionCode } from '../release/identity';
+import { APP_NAME, PUBLIC_VERSION_LABEL, collectDiagnostics, installedVersionCode } from '../release/identity';
 type Tab = 'setup' | 'rooms' | 'results' | 'report';
 type Screen = { n: 'home' } | { n: 'settings' } | { n: 'about' } | { n: 'proj'; tab: Tab } | { n: 'room'; id: string; step: number } | { n: 'asm'; kind: AssemblyKind; editId?: string; back: Screen; apply?: (id: string) => void };
 
@@ -108,7 +108,7 @@ export function startApp(root: HTMLElement, boot: { splashDone: Promise<void> } 
       list.map(x => h('div', { class: 'card' }, h('b', {}, x.name), h('div', { class: 'mut' }, new Date(x.updatedAt).toLocaleString()),
         h('div', { class: 'row' }, h('button', { onClick: () => { try { p = store.load(x.id); go({ n: 'proj', tab: 'rooms' }); } catch (e) { toast = (e as Error).message; render(); } } }, 'Open'),
           h('button', { class: 'danger', onClick: () => { if (confirm(`Delete "${x.name}"?`)) { store.remove(x.id); render(); } } }, 'Delete')))),
-      h('p', { class: 'mut' }, `v${__APP_VERSION__} · build ${__BUILD_SHA__} · Not ACCA-approved. Preliminary survey tool; see report for method limits. Details: Settings → About.`),
+      h('p', { class: 'mut' }, `${APP_NAME} ${PUBLIC_VERSION_LABEL} · Not ACCA-approved. Preliminary survey tool; see report for method limits. Details: Settings → About.`),
     ]);
   }
 

@@ -8,10 +8,15 @@ const gradleVars = readFileSync('android/variables.gradle', 'utf8');
 const sdk = (k: string) => Number(gradleVars.match(new RegExp(`${k}\\s*=\\s*(\\d+)`))?.[1] ?? 0);
 const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
 const env = (k: string, d = '') => process.env[k] ?? d;
+// PUBLIC product version: one source of truth (release/VERSION), overridable by the delivery workflow.
+const publicVersion = Number(process.env.PUBLIC_VERSION || readFileSync('release/VERSION', 'utf8').trim());
+if (!Number.isInteger(publicVersion) || publicVersion < 1) throw new Error('release/VERSION must be a positive integer');
+const delivered = process.env.DELIVERED === '1';
 
 export default defineConfig({
   base: './',
   define: {
+    __PUBLIC_VERSION__: publicVersion, __DELIVERED__: delivered,
     __BUILD_SHA__: JSON.stringify(sha),
     __APP_VERSION__: JSON.stringify(pkg.version),
     __MIN_SDK__: sdk('minSdkVersion'), __TARGET_SDK__: sdk('targetSdkVersion'), __COMPILE_SDK__: sdk('compileSdkVersion'),

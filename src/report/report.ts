@@ -32,7 +32,7 @@ body{font:14px/1.4 system-ui,sans-serif;margin:16px;color:#111}table{border-coll
 .room{page-break-inside:avoid;border-top:2px solid #333;margin-top:14px}</style></head><body>
 <h1>Residential load survey report</h1>
 <div class="banner"><b>Not an ACCA Manual J report and not ACCA-approved software.</b> This is a preliminary survey calculation using a partial method (see "Not included"). Do not use it alone to size equipment.${partial ? ' <b>INCOMPLETE:</b> one or more required inputs are missing, so house totals are not final.' : ''}</div>
-<h2>Project</h2><p><b>${esc(p.name)}</b><br>Client: ${esc(p.client) || '—'}<br>Address: ${esc(p.address) || '—'}<br>Report generated: ${esc(new Date().toISOString())}<br>Engine ${esc(r.engineVersion)} · build ${esc(__BUILD_SHA__)}</p>
+<h2>Project</h2><p><b>${esc(p.name)}</b><br>Client: ${esc(p.client) || '—'}<br>Address: ${esc(p.address) || '—'}<br>Report generated: ${esc(new Date().toISOString())}<br>Manual J ${esc(__DELIVERED__ ? `v${__PUBLIC_VERSION__}` : `v${__PUBLIC_VERSION__} (development build)`)} · Engine ${esc(r.engineVersion)} · source ${esc(__BUILD_SHA__)}</p>
 <h2>Design conditions</h2><table><tr><td>Location</td><td>${esc(d.location) || '—'}</td></tr><tr><td>Source</td><td>${esc(d.source) || '<span class="bad">none stated</span>'}</td></tr>
 <tr><td>Heating: outdoor / indoor</td><td>${d.heatOutdoorF ?? '—'} °F / ${d.heatIndoorF ?? '—'} °F</td></tr><tr><td>Cooling: outdoor / indoor</td><td>${d.coolOutdoorF ?? '—'} °F / ${d.coolIndoorF ?? '—'} °F</td></tr>
 <tr><td>Humidity ratio outdoor / indoor (cooling)</td><td>${d.outdoorGrainsCool ?? '—'} / ${d.indoorGrainsCool ?? '—'} gr/lb</td></tr><tr><td>Elevation</td><td>${d.elevationFt ?? '—'} ft</td></tr>

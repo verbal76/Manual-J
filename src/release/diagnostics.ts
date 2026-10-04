@@ -3,7 +3,7 @@ import { PLAY_REQUIRED_TARGET_SDK, PLAY_REQUIREMENT_VERIFIED_ON, playCompliance 
 export interface DiagnosticsInput {
   capturedAt: string;
   native: { platform: string; osVersion?: string; apiLevel?: number; model?: string; locale?: string; appId?: string; versionName?: string; versionCode?: string };
-  build: { appName: string; appVersion: string; sourceSha: string; buildType: string; signing: string; minSdk: number; targetSdk: number; compileSdk: number; runtime: number };
+  build: { appName: string; publicVersion: string; appVersion: string; sourceSha: string; buildType: string; signing: string; minSdk: number; targetSdk: number; compileSdk: number; runtime: number };
   ota: { enabled: boolean; why?: string; channel: string; runningFrom: 'EMBEDDED' | 'OTA'; id: string; name: string; seq: number; sourceSha: string; published: string; status: string; lastCheck: string; lastResult: string };
   engine: { version: string; projectSchema: number };
 }
@@ -14,7 +14,7 @@ export function buildDiagnostics(d: DiagnosticsInput): string {
   const { native: n, build: b, ota: o, engine: e } = d;
   return [
     `${b.appName.toUpperCase()} DIAGNOSTICS`, `Captured at: ${d.capturedAt}`, '',
-    'APPLICATION', `  Name: ${b.appName}`, `  Version: ${b.appVersion}`, `  Source commit: ${b.sourceSha}`, `  Build type: ${b.buildType}`,
+    'APPLICATION', `  Product: ${b.appName}`, `  Version: ${b.publicVersion}`, `  Technical app version: ${b.appVersion}`, `  Source commit: ${b.sourceSha}`, `  Build type: ${b.buildType}`,
     `  Engine: ${e.version}`, `  Project data schema: ${e.projectSchema}`, '',
     'INSTALL (native)', `  Package ID: ${v(n.appId)}`, `  Native versionName: ${v(n.versionName)}`, `  Native versionCode: ${v(n.versionCode)}`, `  Runtime compatibility: ${b.runtime}`, '',
     'DEVICE', `  Platform: ${n.platform}`, `  Android: ${v(n.osVersion)} (API ${v(n.apiLevel)})`, `  Model: ${v(n.model)}`, `  Locale: ${v(n.locale)}`, '',

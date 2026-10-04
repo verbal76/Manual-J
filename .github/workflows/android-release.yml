@@ -10,7 +10,7 @@ jobs:
     env:
       BUILD_SHA: ${{ github.sha }}
       # Play lineage is separate from sideloaded debug builds (different signing key, so they never replace each other).
-      VERSION_CODE: ${{ github.run_number }}
+      DELIVERED: '1'
       SIGNING_STATE: UPLOAD-KEY
       BUILD_TYPE: release
       OTA_MANIFEST_URL: ${{ vars.OTA_MANIFEST_URL }}
@@ -20,6 +20,9 @@ jobs:
         run: |
           [ -n "$KS" ] && [ -n "$P1" ] && [ -n "$A" ] && [ -n "$P2" ] || { echo "::error::Upload-key secrets are not configured (UPLOAD_KEYSTORE_BASE64, UPLOAD_KEYSTORE_PASSWORD, UPLOAD_KEY_ALIAS, UPLOAD_KEY_PASSWORD). Refusing to build a release."; exit 1; }
       - uses: actions/checkout@v4
+      - name: Public version and versionCode from release/VERSION (single source)
+        run: |
+          N=$(cat release/VERSION); echo "PUBLIC_VERSION=$N" >> "$GITHUB_ENV"; echo "VERSION_CODE=$((100 + N))" >> "$GITHUB_ENV"
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: npm }
       - run: npm ci
@@ -42,13 +45,13 @@ jobs:
           {
             echo "### Release build identity"
             echo "- Branch: ${GITHUB_REF_NAME}"; echo "- SHA: ${GITHUB_SHA}"
-            echo "- versionName: $(node -p "require('./package.json').version")"; echo "- versionCode: ${VERSION_CODE}"
+            echo "- Public version: v${PUBLIC_VERSION}"; echo "- versionName (technical): $(node -p "require('./package.json').version")"; echo "- versionCode: ${VERSION_CODE}"
             echo "- applicationId: $(node -p "require('./capacitor.config.json').appId")"
             echo "- targetSdk: $(grep -oP 'targetSdkVersion = \K\d+' android/variables.gradle)"
             echo "- build type: release; signing: upload key (Play App Signing re-signs for distribution)"
             echo "- run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           } | tee -a "$GITHUB_STEP_SUMMARY"
-          cp android/app/build/outputs/bundle/release/app-release.aab "manual-j-${VERSION_CODE}-${GITHUB_SHA::7}.aab"
-          cp android/app/build/outputs/apk/release/app-release.apk "manual-j-${VERSION_CODE}-${GITHUB_SHA::7}-release.apk"
+          cp android/app/build/outputs/bundle/release/app-release.aab "Manual-J-v${PUBLIC_VERSION}.aab"
+          cp android/app/build/outputs/apk/release/app-release.apk "Manual-J-v${PUBLIC_VERSION}-release.apk"
       - uses: actions/upload-artifact@v4
-        with: { name: manual-j-release, path: 'manual-j-*' }
+        with: { name: manual-j-release, path: 'Manual-J-v*' }

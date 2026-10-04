@@ -106,11 +106,11 @@ describe('updater state machine', () => {
 
 describe('diagnostics', () => {
   const input = { capturedAt: 'T', native: { platform: 'android', appId: 'com.x', versionName: '0.1.0', versionCode: '7', osVersion: '15', apiLevel: 35, model: 'Pixel', locale: 'en-US' },
-    build: { appName: 'Manual J Survey', appVersion: '0.1.0', sourceSha: 'abc', buildType: 'debug', signing: 'DEBUG', minSdk: 23, targetSdk: 35, compileSdk: 35, runtime: 1 },
+    build: { appName: 'Manual J', publicVersion: 'v6', appVersion: '0.1.0', sourceSha: 'abc', buildType: 'debug', signing: 'DEBUG', minSdk: 23, targetSdk: 35, compileSdk: 35, runtime: 1 },
     ota: { enabled: false, why: 'no server', channel: 'internal', runningFrom: 'EMBEDDED' as const, id: '', name: '', seq: 0, sourceSha: '', published: '', status: 'disabled', lastCheck: 'never', lastResult: 'n/a' }, engine: { version: 'e', projectSchema: 1 } };
   it('answers the identity questions and states Play compliance', () => {
     const t = buildDiagnostics(input);
-    for (const s of ['Package ID: com.x', 'Native versionCode: 7', 'Runtime compatibility: 1', 'Channel: internal', 'EMBEDDED', 'targetSdk: 35', 'Play API compliant: NO', 'API 35']) expect(t).toContain(s);
+    for (const s of ['Product: Manual J', 'Version: v6', 'Package ID: com.x', 'Native versionCode: 7', 'Runtime compatibility: 1', 'Channel: internal', 'EMBEDDED', 'targetSdk: 35', 'Play API compliant: NO', 'API 35']) expect(t).toContain(s);
   });
   it('never includes project/personal data fields', () => expect(buildDiagnostics(input)).not.toMatch(/client|address|token|password|secret/i));
   it('play compliance flips at the required API', () => { expect(playCompliance(PLAY_REQUIRED_TARGET_SDK - 1)).toBe('NO'); expect(playCompliance(PLAY_REQUIRED_TARGET_SDK)).toBe('YES'); });
