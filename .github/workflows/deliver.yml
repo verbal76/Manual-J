@@ -95,5 +95,9 @@ jobs:
           - Settings → About in the app shows this version and the technical identifiers.
           NOTES
           sed -i 's/^          //' notes.md
-          gh release create "v${N}" "$APK" "$APK.sha256.txt" --title "Manual J v${N}" --notes-file notes.md --target "$SOURCE_SHA" --latest
+          git config user.name "github-actions"; git config user.email "actions@users.noreply.github.com"
+          git tag -a "v${N}" "$SOURCE_SHA" -m "Manual J v${N}" && git push origin "v${N}"
+          if ! gh release create "v${N}" "$APK" "$APK.sha256.txt" --title "Manual J v${N}" --notes-file notes.md --verify-tag --latest; then
+            echo "--- release API diagnostics"; gh api -i -X POST "repos/$GITHUB_REPOSITORY/releases" -f tag_name="v${N}" -f name="Manual J v${N}" -F draft=true 2>&1 | head -30; exit 1
+          fi
           gh release view "v${N}" --json name,tagName,isLatest,url,assets --jq . | tee -a "$GITHUB_STEP_SUMMARY"
