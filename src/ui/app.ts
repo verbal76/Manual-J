@@ -126,12 +126,12 @@ export function startApp(root: HTMLElement, boot: { splashDone: Promise<void> } 
     root.replaceChildren(...(kids.flat(3).filter(Boolean) as Node[]));
   }
 
-  let rendering = false, again = false;
+  let rendering = false, again = false, firstRendered = false;
   function render(): void {
     // Blurring the focused field fires its pending 'change' (which commits and re-renders); coalesce those.
     if (rendering) { again = true; return; }
     rendering = true;
-    try { (document.activeElement as HTMLElement | null)?.blur?.(); do { again = false; renderNow(); } while (again); }
+    try { (document.activeElement as HTMLElement | null)?.blur?.(); do { again = false; renderNow(); } while (again); if (!firstRendered) { firstRendered = true; try { performance.mark('manualj:first-render'); } catch { /* optional */ } } }
     catch (e) { logError('render', e); root.replaceChildren(h('div', { class: 'card' }, h('h3', {}, 'Something went wrong showing this screen'), h('p', { class: 'mut' }, 'Your saved projects are unaffected.'), h('button', { class: 'big', onClick: () => { screen = { n: 'home' }; p = null; render(); } }, 'Back to projects'))); }
     finally { rendering = false; }
   }

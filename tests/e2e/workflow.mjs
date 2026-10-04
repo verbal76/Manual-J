@@ -1,4 +1,5 @@
 // Full user-workflow check in headless Chromium against `vite preview` (port 4173). Playwright from /opt/node-tools.
+// Needs: npx tsx scripts/seed-project.ts > /tmp/claude-0/seed.json (used by the performance check).
 import { createRequire } from 'module';
 const { chromium } = createRequire('/opt/node-tools/')('playwright');
 let bad = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); if (!c) bad++; };
@@ -82,5 +83,19 @@ for (const [name, vp] of [['small phone', { width: 320, height: 640 }], ['phone'
   await pg.click('header >> text=Back'); await pg.click('text=Settings'); await pg.click('text=About / release diagnostics'); await check('about');
   if (name === 'phone') await pg.screenshot({ path: '/tmp/claude-0/about-phone.png' });
   ok(pg.errs.length === 0, `${name}: no page errors ${pg.errs.join(';')}`); await pg.context().close();
+}
+// ---------- 6. performance: first render behind the splash is quick; repeated navigation does not leak DOM or memory ----------
+{
+  const ctx = await b.newContext({ viewport: { width: 390, height: 800 } }); const pg = await ctx.newPage(); pg.on('dialog', d => d.accept());
+  await pg.addInitScript(([s]) => { if (!localStorage.getItem('manualj:index')) { localStorage.setItem('manualj:project:' + s.id, JSON.stringify(s)); localStorage.setItem('manualj:index', JSON.stringify([{ id: s.id, name: s.name, updatedAt: new Date().toISOString() }])); } }, [JSON.parse((await import('fs')).readFileSync('/tmp/claude-0/seed.json', 'utf8'))]);
+  await pg.goto(URL); await pg.waitForSelector('#hag-splash', { state: 'detached', timeout: 6000 });
+  const first = await pg.evaluate(() => performance.getEntriesByName('manualj:first-render')[0]?.startTime ?? -1); ok(first > 0 && first < 1500, `first render (behind the studio card) at ${Math.round(first)} ms`);
+  await pg.click('button:has-text("Open")');
+  const nodes = async () => pg.evaluate(() => document.querySelectorAll('*').length);
+  const n0 = await nodes(); const t0 = Date.now();
+  for (let i = 0; i < 60; i++) for (const t of ['Setup', 'Rooms', 'Results', 'Report']) await pg.click(`nav >> text=${t}`);
+  const per = (Date.now() - t0) / 240; const n1 = await nodes();
+  ok(Math.abs(n1 - n0) < 400, `DOM size stable after 240 navigations (${n0} -> ${n1})`); ok(per < 150, `average navigation ${per.toFixed(0)} ms`);
+  await ctx.close();
 }
 await b.close(); console.log(bad ? `${bad} FAILURES` : 'ALL PASS'); process.exit(bad ? 1 : 0);
