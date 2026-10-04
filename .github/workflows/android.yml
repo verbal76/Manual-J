@@ -2,7 +2,7 @@ name: Android debug build
 # DEVELOPMENT build only. Artifacts here are NOT delivered versions and carry no public vN (see docs/RELEASING.md).
 on:
   push:
-    branches: ['**']
+    branches-ignore: ['qualify/**', 'release/**']
   workflow_dispatch:
 jobs:
   build:
