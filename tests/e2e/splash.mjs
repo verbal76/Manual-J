@@ -1,0 +1,43 @@
+// Run against `vite preview` (4173) with Playwright. Verifies the REAL canonical logo: first paint, centring, contain-fit, timing, no replay, skip flag, image-failure safety.
+import { createRequire } from 'module';
+const { chromium } = createRequire('/opt/node-tools/')('playwright');
+const b = await chromium.launch(); let bad = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); if (!c) bad++; };
+for (const [name, vp] of [['portrait', { width: 390, height: 800 }], ['landscape', { width: 800, height: 390 }], ['tablet', { width: 1024, height: 768 }]]) {
+  const ctx = await b.newContext({ viewport: vp }); const pg = await ctx.newPage(); const errs = []; pg.on('pageerror', e => errs.push(e.message));
+  const t0 = Date.now(); await pg.goto('http://localhost:4173/', { waitUntil: 'domcontentloaded' });
+  await pg.waitForFunction(() => { const i = document.getElementById('hag-logo'); return i && i.complete && i.naturalWidth > 0; });
+  const info = await pg.evaluate(() => { const i = document.getElementById('hag-logo'), s = document.getElementById('hag-splash'), r = i.getBoundingClientRect(); return { nat: [i.naturalWidth, i.naturalHeight], box: [r.x, r.y, r.width, r.height], bg: getComputedStyle(s).backgroundImage.slice(0, 40), fit: getComputedStyle(i).objectFit, vw: innerWidth, vh: innerHeight, src: i.currentSrc }; });
+  const [x, y, w, h] = info.box;
+  ok(info.nat[0] === 1536 && info.nat[1] === 1024, `${name}: natural size 1536x1024 (canonical bytes loaded) ${info.src.split('/').pop()}`);
+  ok(Math.abs(w / h - 1.5) < 0.01, `${name}: displayed aspect ${(w / h).toFixed(3)} == 1.5 (no stretch)`);
+  ok(x >= -0.5 && y >= -0.5 && x + w <= info.vw + 0.5 && y + h <= info.vh + 0.5, `${name}: whole logo inside viewport (no crop) box=${[x, y, w, h].map(Math.round)}`);
+  ok(Math.abs((x + w / 2) - info.vw / 2) < 1.5 && Math.abs((y + h / 2) - info.vh / 2) < 1.5, `${name}: centred`);
+  ok(info.fit === 'contain' && info.bg.includes('radial-gradient'), `${name}: contain + dark background (${info.fit})`);
+  if (name === 'portrait') await pg.screenshot({ path: '/tmp/claude-0/splash-portrait.png' });
+  if (name === 'landscape') await pg.screenshot({ path: '/tmp/claude-0/splash-landscape.png' });
+  await pg.waitForSelector('#hag-splash', { state: 'detached', timeout: 6000 }); const total = Date.now() - t0;
+  ok(total > 2300 && total < 3600, `${name}: card gone after ${total} ms incl. page load (target 2.6 s from first paint)`);
+  ok(await pg.locator('text=New project').isVisible(), `${name}: Manual J home follows`);
+  await pg.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))); await pg.waitForTimeout(300);
+  ok((await pg.locator('#hag-splash').count()) === 0, `${name}: resume/visibility change does not replay`);
+  ok(errs.length === 0, `${name}: no page errors ${errs.join(';')}`); await ctx.close();
+}
+{ // OTA-triggered reload must not replay the card
+  const ctx = await b.newContext({ viewport: { width: 390, height: 800 } }); const pg = await ctx.newPage();
+  await pg.goto('http://localhost:4173/'); await pg.waitForSelector('#hag-splash', { state: 'detached', timeout: 6000 });
+  await pg.evaluate(() => sessionStorage.setItem('manualj:skipSplashOnce', '1')); await pg.reload(); await pg.waitForSelector('text=New project');
+  ok((await pg.locator('#hag-splash').count()) === 0, 'update-activation reload skips the card'); ok((await pg.evaluate(() => sessionStorage.getItem('manualj:skipSplashOnce'))) === null, 'skip flag is one-shot');
+  await pg.reload(); ok((await pg.locator('#hag-splash').count()) === 1, 'next cold load shows the card again'); await ctx.close();
+}
+{ // image failure cannot strand the user
+  const ctx = await b.newContext({ viewport: { width: 390, height: 800 } }); const pg = await ctx.newPage();
+  await pg.route('**/hag-splash*.webp', r => r.abort());
+  await pg.goto('http://localhost:4173/'); const t = Date.now(); await pg.waitForSelector('text=New project', { timeout: 8000 });
+  await pg.waitForSelector('#hag-splash', { state: 'detached', timeout: 8000 }); ok(Date.now() - t < 3000, 'missing logo image: card removed promptly, app usable'); await ctx.close();
+}
+{ // saved projects still load behind/after the card
+  const ctx = await b.newContext({ viewport: { width: 390, height: 800 } }); const pg = await ctx.newPage();
+  await pg.goto('http://localhost:4173/'); await pg.evaluate((rec) => { localStorage.setItem('manualj:project:' + rec.id, JSON.stringify(rec)); localStorage.setItem('manualj:index', JSON.stringify([{ id: rec.id, name: rec.name, updatedAt: new Date().toISOString() }])); }, {"schemaVersion": 1, "id": "8fd35090-0720-439a-875d-b077305374a6", "name": "Saved house", "client": "J. Smith", "address": "12 Maple St", "createdAt": "2026-10-04T22:27:05.077Z", "updatedAt": "2026-10-04T22:27:05.077Z", "design": {"location": "n/a (synthetic)", "source": "Synthetic test values", "elevationFt": null, "heatOutdoorF": 10, "coolOutdoorF": 95, "heatIndoorF": 70, "coolIndoorF": 75, "outdoorGrainsCool": 120, "indoorGrainsCool": 70, "solarGain": {}}, "infiltration": {"heatAch": {"value": 0.5, "quality": "KNOWN"}, "coolAch": {"value": 0.3, "quality": "KNOWN"}}, "internal": {"sensiblePerPersonBtuh": {"value": null, "quality": "UNKNOWN"}, "latentPerPersonBtuh": {"value": null, "quality": "UNKNOWN"}}, "assemblies": [{"id": "018a3c73-012a-4d5a-93ce-673a1f96e2bb", "kind": "wall", "name": "Test wall", "descriptors": {}, "u": {"value": 0.05, "quality": "KNOWN"}}, {"id": "891a307d-c4ac-4130-a6bf-10c6ec0ddcda", "kind": "window", "name": "Test window", "descriptors": {}, "u": {"value": 0.5, "quality": "KNOWN"}}, {"id": "e3658c01-4958-483f-bd91-0cb6abdad310", "kind": "door", "name": "Test door", "descriptors": {}, "u": {"value": 0.4, "quality": "KNOWN"}}, {"id": "10e40860-8d2e-4871-8e2b-2159a495dbee", "kind": "roof-ceiling", "name": "Test ceiling", "descriptors": {}, "u": {"value": 0.03, "quality": "KNOWN"}}], "house": {"name": "House", "rooms": [{"id": "ae5525c6-3fdc-4bc4-ad27-87de83069695", "name": "Box", "floorLevel": 1, "lengthFt": 20, "widthFt": 15, "ceilingHeightFt": 8, "placement": {"xFt": 0, "yFt": 0, "rotationDeg": 0}, "walls": [{"id": "369bad0f-07a2-45db-bf60-d0465964bff5", "label": "Wall 1", "heading": {"deg": 0, "source": "manual", "confidence": null}, "lengthFt": 20, "heightFt": 8, "measurement": {"method": "manual", "confirmed": true}, "exposure": {"type": "exterior", "adjacentHeatTempF": null, "adjacentCoolTempF": null}, "assemblyId": "018a3c73-012a-4d5a-93ce-673a1f96e2bb", "openings": [{"id": "ef8b5709-0bd5-43ae-b093-d5569f256196", "kind": "window", "quantity": 2, "widthFt": 3, "heightFt": 4, "assemblyId": "891a307d-c4ac-4130-a6bf-10c6ec0ddcda", "shgc": {"value": null, "quality": "UNKNOWN"}, "shading": "unknown"}]}, {"id": "6d5daa50-7f3f-4790-89c4-73184eb49fb7", "label": "Wall 2", "heading": {"deg": 90, "source": "manual", "confidence": null}, "lengthFt": 15, "heightFt": 8, "measurement": {"method": "manual", "confirmed": true}, "exposure": {"type": "interior-conditioned", "adjacentHeatTempF": null, "adjacentCoolTempF": null}, "assemblyId": null, "openings": []}, {"id": "f4e130fe-e44c-4148-8b96-2876ba5ec0dc", "label": "Wall 3", "heading": {"deg": 180, "source": "manual", "confidence": null}, "lengthFt": 20, "heightFt": 8, "measurement": {"method": "manual", "confirmed": true}, "exposure": {"type": "exterior", "adjacentHeatTempF": null, "adjacentCoolTempF": null}, "assemblyId": "018a3c73-012a-4d5a-93ce-673a1f96e2bb", "openings": [{"id": "d9c6dd11-19a4-4912-ab19-832cb214f8c7", "kind": "door", "quantity": 1, "widthFt": 3, "heightFt": 7, "assemblyId": "e3658c01-4958-483f-bd91-0cb6abdad310", "shgc": {"value": null, "quality": "UNKNOWN"}, "shading": "unknown"}]}, {"id": "61d3e65b-7c78-4a79-a741-ce6e140940f3", "label": "Wall 4", "heading": {"deg": 270, "source": "manual", "confidence": null}, "lengthFt": 15, "heightFt": 8, "measurement": {"method": "manual", "confirmed": true}, "exposure": {"type": "interior-conditioned", "adjacentHeatTempF": null, "adjacentCoolTempF": null}, "assemblyId": null, "openings": []}], "ceiling": {"condition": "unconditioned", "assemblyId": "10e40860-8d2e-4871-8e2b-2159a495dbee", "adjacentHeatTempF": 20, "adjacentCoolTempF": 120}, "floor": {"condition": "conditioned-adjacent", "assemblyId": null, "adjacentHeatTempF": null, "adjacentCoolTempF": null}, "occupants": 0, "applianceSensibleBtuh": 0}]}});
+  await pg.reload(); await pg.waitForSelector('#hag-splash', { state: 'detached', timeout: 6000 }); ok(await pg.locator('text=Saved house').isVisible(), 'saved project list loads after the card'); await ctx.close();
+}
+await b.close(); console.log(bad ? `${bad} FAILURES` : 'ALL PASS'); process.exit(bad ? 1 : 0);

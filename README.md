@@ -1,2 +1,17 @@
 # Manual-J
-This app is for calculating a manual j load on a residential home 
+Field-first residential heating/cooling load **survey and calculation** tool (phone/tablet, offline). **Not ACCA-approved; not an official Manual J result.**
+
+- `src/engine` deterministic engine (no UI imports): types, units, geometry, validation, calc, provenance.
+- `src/model` factories, persistence + schema migration. `src/report` report generator. `src/ui` vanilla-TS field UI.
+- `tests` engine tests + analytic fixture; `npm run validate` writes `docs/VALIDATION_RESULTS.md`.
+- Android: Capacitor wrapper in `android/`; CI (`.github/workflows/android.yml`) builds a debug APK per commit.
+
+Commands: `npm ci`, `npm test`, `npm run build`, `npm run dev`.
+Docs: `docs/ENGINEERING_SOURCES.md`, `docs/IMPLEMENTATION_BRIEF.md`, `docs/VALIDATION_PLAN.md`, `docs/OWNER_QUESTIONS.md`.
+Engineering rule: no unsourced constants. Unknown values stay UNKNOWN and block the affected load.
+
+Release/OTA/Play: `docs/PLAY_READINESS.md`, `docs/OTA_ARCHITECTURE.md`, `docs/RELEASE_IDENTITY_UI.md`, `docs/PRIVACY_DRAFT.md`. Workflows: `android.yml` (debug APK), `android-release.yml` (signed AAB, manual), `ota-publish.yml` (OTA, manual, dry-run default).
+
+Release/version naming: `docs/RELEASING.md` (public version is `Manual J v<N>`; next is in `release/VERSION`).
+
+Review/validation docs: `docs/ENGINEERING_REVIEW.md` (formulas, assumptions, findings), `docs/OPEN_ITEMS.md` (single reassessed open list), `docs/VALIDATION_RESULTS.md`.

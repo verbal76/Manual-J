@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Manual J Survey</string>
+    <string name="title_activity_main">Manual J Survey</string>
+    <string name="package_name">com.hotatticgames.manualj</string>
+    <string name="custom_url_scheme">com.hotatticgames.manualj</string>
+</resources>

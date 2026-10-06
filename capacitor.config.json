@@ -1,0 +1,14 @@
+{
+  "appId": "com.hotatticgames.manualj",
+  "appName": "Manual J Survey",
+  "webDir": "dist",
+  "backgroundColor": "#000000",
+  "plugins": {
+    "CapacitorUpdater": {
+      "autoUpdate": false,
+      "appReadyTimeout": 10000,
+      "resetWhenUpdate": true,
+      "statsUrl": ""
+    }
+  }
+}

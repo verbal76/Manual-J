@@ -1,0 +1,124 @@
+name: Deliver build (GitHub Release)
+# Pushing a branch named release/vN delivers public version N as a GitHub Release titled "Manual J vN"
+# with the artifact Manual-J-vN.apk, marked Latest. N is NEVER reused: the run fails if tag vN exists.
+#  - Normal delivery: the branch's release/VERSION must equal N; the APK is built here from that commit.
+#  - Re-presenting an already built, verified binary: add release/existing-run.txt (Actions run id) and
+#    release/existing-sha256.txt (the APK's expected SHA-256); the exact binary is attached, nothing is rebuilt.
+on:
+  push:
+    branches: ['release/v*']
+concurrency:
+  group: deliver-${{ github.ref }}
+  cancel-in-progress: false
+permissions:
+  contents: write
+  actions: read
+env:
+  GH_TOKEN: ${{ github.token }}
+jobs:
+  deliver:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: Resolve version and refuse reuse
+        id: v
+        run: |
+          N="${GITHUB_REF_NAME#release/v}"
+          [[ "$N" =~ ^[1-9][0-9]*$ ]] || { echo "::error::branch must be release/v<number>"; exit 1; }
+          if gh release view "v$N" >/dev/null 2>&1; then echo "::error::Release v$N already exists. Public versions are never reused."; exit 1; fi
+          # The tag is created beforehand by a person/session with workflow permission (the Actions token may not create
+          # tags on commits whose history touches .github/workflows): git tag -a vN <commit> && git push origin vN
+          echo "N=$N" >> "$GITHUB_ENV"
+          if [ -f release/existing-run.txt ]; then echo "EXISTING_RUN=$(tr -d '[:space:]' < release/existing-run.txt)" >> "$GITHUB_ENV"; fi
+      - name: Reuse the exact verified binary
+        if: ${{ env.EXISTING_RUN != '' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: manual-j-debug-apk
+          path: existing
+          run-id: ${{ env.EXISTING_RUN }}
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+      - name: Prepare existing binary
+        if: ${{ env.EXISTING_RUN != '' }}
+        run: |
+          SRC=$(ls existing/*.apk | head -1); WANT=$(tr -d '[:space:]' < release/existing-sha256.txt)
+          GOT=$(sha256sum "$SRC" | cut -d' ' -f1)
+          [ "$GOT" = "$WANT" ] || { echo "::error::APK SHA-256 mismatch: got $GOT, expected $WANT"; exit 1; }
+          cp "$SRC" "Manual-J-v${N}.apk"
+          echo "SOURCE_SHA=$(gh api repos/$GITHUB_REPOSITORY/actions/runs/$EXISTING_RUN --jq .head_sha)" >> "$GITHUB_ENV"
+          echo "ORIGIN=existing build from Actions run $EXISTING_RUN (binary reused unchanged, not rebuilt)" >> "$GITHUB_ENV"
+      - name: Check release/VERSION matches
+        if: ${{ env.EXISTING_RUN == '' }}
+        run: '[ "$(tr -d "[:space:]" < release/VERSION)" = "$N" ] || { echo "::error::release/VERSION does not equal $N"; exit 1; }'
+      - uses: actions/setup-node@v4
+        if: ${{ env.EXISTING_RUN == '' }}
+        with: { node-version: 22, cache: npm }
+      - uses: actions/setup-java@v4
+        if: ${{ env.EXISTING_RUN == '' }}
+        with: { distribution: temurin, java-version: 21 }
+      - name: Build from this commit
+        if: ${{ env.EXISTING_RUN == '' }}
+        env:
+          BUILD_SHA: ${{ github.sha }}
+          SIGNING_STATE: DEBUG
+          BUILD_TYPE: debug
+          DELIVERED: '1'
+        run: |
+          export PUBLIC_VERSION="$N" VERSION_CODE="$((100 + N))"
+          npm ci && npm run typecheck && npm test && npm run validate && npm run build && npx cap sync android
+          (cd android && ./gradlew assembleDebug --no-daemon)
+          cp android/app/build/outputs/apk/debug/app-debug.apk "Manual-J-v${N}.apk"
+          echo "SOURCE_SHA=$GITHUB_SHA" >> "$GITHUB_ENV"; echo "ORIGIN=built by this workflow run ${GITHUB_RUN_ID}" >> "$GITHUB_ENV"
+      - name: Qualify the APK being released (package, SDKs, permissions, signature, 16 KB, splash + icon)
+        if: ${{ env.EXISTING_RUN == '' }}
+        run: |
+          set -o pipefail
+          scripts/qualify-apk.sh "Manual-J-v${N}.apk" "$((100 + N))" | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Inspect the binary actually being released
+        run: |
+          APK="Manual-J-v${N}.apk"; BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          sha256sum "$APK" | cut -d' ' -f1 > "$APK.sha256.txt"; echo "$(cat "$APK.sha256.txt")  $APK" > "$APK.sha256.txt"
+          B=$("$BT/aapt2" dump badging "$APK" | head -1); echo "BADGING=$B" >> "$GITHUB_ENV"
+          echo "TARGET=$("$BT/aapt2" dump badging "$APK" | grep -oP "targetSdkVersion:'\K[0-9]+")" >> "$GITHUB_ENV"
+          echo "CERT=$("$BT/apksigner" verify --print-certs "$APK" | grep -m1 'SHA-256' | awk '{print $NF}')" >> "$GITHUB_ENV"
+          echo "APKSHA=$(cut -d' ' -f1 "$APK.sha256.txt")" >> "$GITHUB_ENV"
+      - name: Upload the cleanly named artifact (always, so the file exists even if release creation is blocked)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Manual-J-v${{ env.N }}
+          path: |
+            Manual-J-v${{ env.N }}.apk
+            Manual-J-v${{ env.N }}.apk.sha256.txt
+      - name: Create the Latest release
+        run: |
+          APK="Manual-J-v${N}.apk"
+          cat > notes.md <<NOTES
+          # Manual J v${N}
+
+          **Android: install \`${APK}\`**
+
+          This is the newest delivered version. (Debug-signed test build; if an older test build is installed, uninstall it first: debug keys differ between builds.)
+
+          ---
+          ### Technical details (for engineers)
+          - Source commit: \`${SOURCE_SHA}\`
+          - Origin: ${ORIGIN}
+          - Binary identity: ${BADGING}
+          - Target SDK (from the APK): ${TARGET}
+          - APK SHA-256: \`${APKSHA}\`
+          - Signing: Android debug certificate, SHA-256 \`${CERT}\`
+          - Settings → About in the app shows this version and the technical identifiers.
+          NOTES
+          sed -i 's/^          //' notes.md
+          if ! TAGGED=$(git rev-parse "refs/tags/v${N}^{commit}" 2>/dev/null); then
+            echo "::warning::Tag v${N} does not exist, so no GitHub Release was created. The APK is available as the Actions artifact Manual-J-v${N}."
+            { echo "### Manual J v${N}: artifact built, GitHub Release NOT created"; echo "No tag v${N} exists (the Actions token may not create tags on commits containing workflow files). Create it, then re-run: git tag -a v${N} ${SOURCE_SHA} -m 'Manual J v${N}' && git push origin v${N}, or create the release by hand and attach Manual-J-v${N}.apk from the artifact."; } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          [ "$TAGGED" = "$SOURCE_SHA" ] || { echo "::error::tag v${N} points to $TAGGED but the binary's source is $SOURCE_SHA"; exit 1; }
+          if ! gh release create "v${N}" "$APK" "$APK.sha256.txt" --title "Manual J v${N}" --notes-file notes.md --verify-tag --latest; then
+            echo "--- release API diagnostics"; gh api -i -X POST "repos/$GITHUB_REPOSITORY/releases" -f tag_name="v${N}" -f name="Manual J v${N}" -F draft=true 2>&1 | head -30; exit 1
+          fi
+          gh release view "v${N}" --json name,tagName,isLatest,url,assets --jq . | tee -a "$GITHUB_STEP_SUMMARY"
