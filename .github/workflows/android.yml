@@ -1,9 +1,12 @@
 name: Android debug build
 # DEVELOPMENT build only. Artifacts here are NOT delivered versions and carry no public vN (see docs/RELEASING.md).
+# Manual only (Actions budget policy, CLAUDE.md): no build on routine pushes. Prove changes locally first; run this for a
+# candidate approaching release or when a physical-test APK is genuinely needed.
 on:
-  push:
-    branches-ignore: ['qualify/**', 'release/**']
   workflow_dispatch:
+concurrency:
+  group: android-debug-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   build:
     runs-on: ubuntu-latest

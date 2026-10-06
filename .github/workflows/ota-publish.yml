@@ -8,6 +8,9 @@ on:
       name: { description: 'Short human-readable OTA name (what changed)', required: true }
       min_version_code: { description: 'Lowest installed native versionCode that may take this OTA', default: '1', required: true }
       dry_run: { description: 'true = build/validate only, do not publish', default: 'true', required: true }
+concurrency:
+  group: ota-publish-${{ github.ref }}
+  cancel-in-progress: false
 permissions:
   contents: write
 jobs:

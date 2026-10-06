@@ -7,6 +7,9 @@ name: Deliver build (GitHub Release)
 on:
   push:
     branches: ['release/v*']
+concurrency:
+  group: deliver-${{ github.ref }}
+  cancel-in-progress: false
 permissions:
   contents: write
   actions: read

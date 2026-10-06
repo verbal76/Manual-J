@@ -2,6 +2,9 @@ name: Android release (signed AAB)
 # Opt-in. Produces the Play upload bundle. FAILS HARD if upload-key secrets are missing; never falls back to debug signing.
 on:
   workflow_dispatch:
+concurrency:
+  group: android-release-${{ github.ref }}
+  cancel-in-progress: false
 permissions:
   contents: read
 jobs:
